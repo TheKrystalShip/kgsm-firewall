@@ -10,9 +10,15 @@ sequence. This file is the working-rules summary; that doc is the source of trut
 ## Status
 
 - **Increment 0 — BUILT (this repo):** the core domain (`IFirewallDriver` seam, capability model,
-  validation, backend detection) + the ufw driver + unit tests + a `detect` smoke verb. No host yet.
-- **Increment 1 — not built:** the socket-activated daemon host (systemd `.socket`+`.service`) + the CLI
-  client surface (`ensure-open`/`remove`/`list`) + boot reconcile.
+  validation, backend detection) + the ufw driver + unit tests.
+- **Increment 1 — BUILT (this repo):** the socket-activated daemon (`Host/`: real systemd FD adoption,
+  accept loop, dispatch, mutation serialisation) + the bundled CLI client (`ensure-open`/`remove`/`list`/
+  `backend`) over a newline-delimited-JSON unix-socket protocol (`Wire/`) + the exit-code contract
+  (`ExitCodes`: unreachable / unsupported / op-failed / unknown — the seam Inc 3 hard-fail builds on) +
+  systemd units (`deploy/`). Live-validated against real systemd socket activation + real ufw. No
+  boot-reconcile loop by design: ufw persists its own rules in `/etc/ufw` (replayed at boot by
+  `ufw.service`), so the socket-activated daemon need not run at boot — verified the rule lands in
+  `user.rules`.
 - **Increment 2 — not built:** kgsm-lib `IFirewallService` (parallel to `IWatchdogClient`) + a shared
   `TheKrystalShip.KGSM.Firewall.Contracts` NuGet + the C#-side audit-event emission.
 - **Increment 3 — not built:** kgsm bash cutover (`files.ufw.sh` → call the authority; hard-fail when it's
@@ -47,6 +53,11 @@ dotnet build kgsm-firewall.slnx -c Release
 dotnet test  kgsm-firewall.slnx -c Release
 dotnet test  kgsm-firewall.slnx -c Release --filter "FullyQualifiedName~UfwDriverTests"
 dotnet publish src/Firewall/Firewall.csproj -c Release -r linux-x64   # expect 0 warnings
+
+# De-risk systemd FD adoption against the PUBLISHED AOT binary (the one path no unit test covers):
+BIN=src/Firewall/bin/Release/net10.0/linux-x64/publish/kgsm-firewall
+systemd-socket-activate -l /tmp/fw.sock "$BIN" serve &
+printf '{"op":"backend"}\n' | socat -t5 - UNIX-CONNECT:/tmp/fw.sock   # or: KGSM_FIREWALL_SOCKET=/tmp/fw.sock "$BIN" backend
 ```
 
 ## Conventions

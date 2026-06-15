@@ -27,6 +27,26 @@ public class UfwDriverTests
     }
 
     [Fact]
+    public async Task EnsureOpen_ChangedPorts_RewritesProfileToExactlyTheNewPorts()
+    {
+        // The "exactly these ports" contract under a config change: re-opening an instance with a
+        // different port set must leave ONLY the new ports. The driver rewrites the profile and runs
+        // `ufw app update` (which re-resolves the existing rule) — live-verified against real ufw 0.36.2
+        // (100/tcp -> 200/tcp and 200/tcp -> 4000:4005/udp each left exactly the new ports in user.rules).
+        var runner = new FakeProcessRunner();
+        var store = new InMemoryUfwProfileStore();
+        UfwDriver driver = Driver(runner, store);
+
+        await driver.EnsureOpenAsync("factorio", [new(100, 100, PortProtocol.Tcp)]);
+        await driver.EnsureOpenAsync("factorio", [new(4000, 4005, PortProtocol.Udp)]);
+
+        string profile = store.Files["kgsm-factorio"];
+        Assert.Contains("ports=4000:4005/udp", profile);
+        Assert.DoesNotContain("100/tcp", profile);                       // stale port gone from our profile
+        Assert.True(runner.WasCalledWith("ufw", "app", "update", "kgsm-factorio")); // forces ufw to re-resolve
+    }
+
+    [Fact]
     public async Task EnsureOpen_UfwAllowFails_RollsBackProfile()
     {
         var runner = new FakeProcessRunner

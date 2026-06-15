@@ -5,10 +5,12 @@ host-firewall state. It owns the privileged **writes** (open/close an instance's
 privileged **reads** (is this port open) so that no other component ever shells `sudo ufw` — part of the
 "headless KGSM, zero per-operation privilege escalation" effort.
 
-> **Status:** **Increment 0 built** (core domain + ufw driver + tests; this repo). The socket-activated
-> privileged host (Inc 1), the kgsm-lib `IFirewallService` + `Firewall.Contracts` package (Inc 2), and the
-> kgsm bash cutover (Inc 3) are not built yet. The authoritative design + build sequence live in
-> **`../headless-network-plan.md` §7 (and §7h for the increments)** — read that first.
+> **Status:** **Increments 0 + 1 built** (this repo). Inc 0 = core domain + ufw driver. Inc 1 = the
+> socket-activated daemon (systemd `.socket`+`.service`, real FD adoption) + the bundled CLI client
+> (`ensure-open`/`remove`/`list`/`backend`) + exit-code contract — live-validated end-to-end against real
+> systemd socket activation and real ufw. The kgsm-lib `IFirewallService` + `Firewall.Contracts` package
+> (Inc 2) and the kgsm bash cutover (Inc 3) are not built yet. The authoritative design + build sequence
+> live in **`../headless-network-plan.md` §7 (and §7h for the increments)** — read that first.
 
 ## Why it exists
 
@@ -68,16 +70,32 @@ dotnet test  kgsm-firewall.slnx -c Release
 # Native AOT — must be a clean ILC pass (0 IL2026/IL3050/ILC warnings):
 dotnet publish src/Firewall/Firewall.csproj -c Release -r linux-x64
 
-# Increment-0 smoke verb (read-only): print the detected backend.
-./src/Firewall/bin/Release/net10.0/linux-x64/publish/kgsm-firewall detect
+BIN=./src/Firewall/bin/Release/net10.0/linux-x64/publish/kgsm-firewall
+$BIN --help                                   # self-documenting: verbs + env knobs
+
+# Dev (no systemd): run the daemon in one shell, drive it from another.
+KGSM_FIREWALL_SOCKET=/tmp/fw.sock sudo -E $BIN serve &
+KGSM_FIREWALL_SOCKET=/tmp/fw.sock $BIN backend
+KGSM_FIREWALL_SOCKET=/tmp/fw.sock $BIN ensure-open myinst 34197/udp 27015:27020/tcp
+KGSM_FIREWALL_SOCKET=/tmp/fw.sock $BIN list
+
+# Production: systemd socket activation (see deploy/). The client wakes the daemon on first connect.
+sudo install -D -m0755 $BIN /opt/kgsm-firewall/kgsm-firewall
+sudo install -m0644 deploy/kgsm-firewall.{socket,service} /etc/systemd/system/
+sudo systemctl enable --now kgsm-firewall.socket
 ```
 
 ## Layout
 
 ```
 src/Firewall/
-  Core/        # contract types, validation, the process-runner seam, service orchestrator, detection
+  Core/        # contract types, validation, process-runner seam, service orchestrator, detection,
+               #   options, the null (honest-degradation) driver
   Drivers/Ufw/ # the ufw driver: profile store, profile render/parse, the driver
-  Program.cs   # Inc 0: a `detect` smoke verb; the socket host + full CLI land in Inc 1
+  Wire/        # the control-socket protocol: request/response DTOs, source-gen JSON, newline framing
+  Host/        # the daemon (socket activation + accept loop + dispatch), the bundled CLI client,
+               #   driver factory, stderr logger, exit-code contract, domain↔wire mapping
+  Program.cs   # one binary, two roles: `serve` (daemon / socket-activated) vs a verb (CLI client)
+deploy/        # kgsm-firewall.socket + .service (+ .env.example): socket-activated, root daemon
 tests/Firewall.Tests/
 ```

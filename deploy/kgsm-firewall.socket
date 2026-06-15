@@ -1,0 +1,25 @@
+[Unit]
+Description=KGSM Firewall authority control socket
+Documentation=https://github.com/TheKrystalShip
+
+[Socket]
+# The control socket. systemd binds + listens here and starts kgsm-firewall.service on the first
+# connection (socket activation), passing this socket as fd 3 — so the privileged authority need not run
+# 24/7 holding root; it wakes on demand.
+ListenStream=/run/kgsm-firewall/firewall.sock
+
+# The socket's filesystem permissions ARE the security boundary (there is no in-daemon authn). Owned
+# root:kgsm, mode 0660: the unprivileged KGSM user may connect and ask the (root) authority to act; no one
+# else can. SET SocketGroup to your KGSM user's group.
+SocketUser=root
+SocketGroup=kgsm
+SocketMode=0660
+
+# systemd creates and owns this runtime dir. It MUST exist before the socket is bound, and the socket is
+# bound before the service ever starts — so RuntimeDirectory belongs on THIS (the socket) unit, not on the
+# service. (Declaring it only on the service would be too late: the bind would fail with ENOENT.)
+RuntimeDirectory=kgsm-firewall
+RuntimeDirectoryMode=0750
+
+[Install]
+WantedBy=sockets.target

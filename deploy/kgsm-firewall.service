@@ -1,0 +1,30 @@
+[Unit]
+Description=KGSM Firewall authority (host-firewall writes for KGSM)
+Documentation=https://github.com/TheKrystalShip
+# Socket activation handles ordering, but make the relationship explicit: this service exists to serve
+# that socket, and should never be started without it.
+Requires=kgsm-firewall.socket
+After=kgsm-firewall.socket
+
+[Service]
+Type=simple
+# Native-AOT single-file binary. Runs as ROOT: it must drive `ufw` (privileged) and write profile files
+# under /etc/ufw/applications.d. Unlike kgsm-watchdog it spawns no untrusted children and does NOT drop
+# privilege after boot — the socket's filesystem perms (root:kgsm 0660, set on the .socket unit) are the
+# only access boundary. The daemon adopts systemd's socket (fd 3) and serves until stopped.
+ExecStart=/opt/kgsm-firewall/kgsm-firewall serve
+
+# The socket path the binary advertises to its bundled client must match the .socket unit's ListenStream.
+Environment=KGSM_FIREWALL_SOCKET=/run/kgsm-firewall/firewall.sock
+# Optional extra knobs (KGSM_FIREWALL_BACKEND, KGSM_FIREWALL_UFW_APPLICATIONS_DIR). The leading '-' makes
+# the file optional. Run `/opt/kgsm-firewall/kgsm-firewall --help` for the authoritative knob list.
+EnvironmentFile=-/etc/kgsm-firewall/kgsm-firewall.env
+
+# Do NOT lock the filesystem down (no ProtectSystem=strict, no ReadOnlyPaths over /etc/ufw): the daemon
+# rewrites ufw application profiles there. It speaks only AF_UNIX itself, but the `ufw`/iptables children
+# it spawns need netlink, so RestrictAddressFamilies is intentionally left unset.
+Restart=on-failure
+RestartSec=2
+
+# No [Install]/WantedBy: this unit is pulled in by the socket on demand, never enabled on its own. Enable
+# kgsm-firewall.socket instead (`systemctl enable --now kgsm-firewall.socket`).
