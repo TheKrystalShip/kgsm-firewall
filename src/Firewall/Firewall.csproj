@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Native AOT: a privileged firewall authority should be a small, fast, no-JIT image.
+         It is socket-activated and transient (it supervises nothing), so it must start instantly
+         and leave no resident footprint between the infrequent firewall operations it performs. -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsAotCompatible>true</IsAotCompatible>
+
+    <!-- Plain Microsoft.NET.Sdk (NOT Sdk.Web), deliberately. Unlike kgsm-watchdog/kgsm-monitor — which
+         serve an HTTP control surface and so take the ASP.NET shared framework — this helper only reads
+         a request off a unix socket and shells out to ufw/firewall-cmd/nft. Pulling the whole ASP.NET
+         stack into a root-capable process is gratuitous attack surface; a console host + raw unix socket
+         is leaner and more appropriate for a privileged door. -->
+
+    <!-- Workstation, non-concurrent GC: this does tiny, bursty work, never a steady-state load, so
+         Server GC's per-core heaps would be pure waste (same reasoning as kgsm-watchdog). -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+
+    <RootNamespace>TheKrystalShip.KGSM.Firewall</RootNamespace>
+    <AssemblyName>kgsm-firewall</AssemblyName>
+
+    <!-- Footprint tuning for the AOT image (mirrors kgsm-watchdog): there is no hot path to speed up,
+         so trade throughput for a smaller native image. -->
+    <OptimizationPreference>Size</OptimizationPreference>
+    <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
+    <StripSymbols>true</StripSymbols>
+    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Logging only; no DI/hosting pulled in yet (the socket host lands in a later increment). The
+         abstractions package is AOT-safe and reflection-free. NO TheKrystalShip.KGSM.Lib reference:
+         kgsm-firewall must not depend on kgsm-lib (kgsm-lib consumes Firewall.Contracts, not vice
+         versa) — that would be a dependency cycle. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Expose internal domain/driver primitives to the test project. -->
+    <InternalsVisibleTo Include="Firewall.Tests" />
+  </ItemGroup>
+
+</Project>
