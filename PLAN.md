@@ -50,14 +50,24 @@ none`.
       `AddKgsmFirewallClient`; kgsm-lib → **1.11.0**. **Transport-only by design** — the client emits NO
       events (see Inc 3); keeping emission out of the transport client (mirroring `WatchdogClient`) means a
       missing event service can never silently drop the audit trail.
-- [ ] **Inc 3 — kgsm bash cutover (hard-fail) + the new events.** `commands/handlers/files.ufw.sh` → call
-      the authority instead of `$SUDO mv/chown/ufw`; keep exit codes 215/216; new dedicated EC code +
-      explicit message when the authority is unreachable. **Define** the new `instance_ports_opened`/
-      `instance_ports_closed` kgsm events (kgsm `EVENT_CONFIGS` + `events.sh` JSON case + test — `events
-      emit` validates the type, so they cannot be emitted until defined) **and emit them from BOTH paths**:
-      the bash command layer, and the C# path via kgsm-lib `IEventManagementService.EmitWithProvenance(actor,
-      origin=api)` (the emission deferred out of Inc 2 — it lands here, against one freshly-defined
-      vocabulary). Update `test_files_ufw_logic.sh`.
+- [x] **Inc 3 — kgsm bash cutover (hard-fail) + the new events (BUILT 2026-06-16).**
+      `commands/handlers/files.ufw.sh` now hands ports to the authority via a new IPC chokepoint
+      `commands/handlers/firewall.sh` (shells the bundled CLI `ensure-open`/`remove`; bash never parses the
+      wire), replacing the `$SUDO mv/chown/ufw` block; exit codes 215/216 kept. New `EC_FIREWALL_UNREACHABLE`
+      maps the CLI's exit 3 (authority down) — distinct from `EC_UFW` (exit 4/5, reachable-but-failed).
+      **Asymmetric hard-fail (refined from "new EC on unreachable"):** enable/install **aborts** on
+      unreachable (§7g); disable/uninstall **warns + continues** (best-effort, like the old `ufw delete ||
+      true`, so a down authority never wedges uninstall) and only a confirmed open/close emits (never a
+      fabricated outcome). **Defined** the new `instance_ports_opened`/`instance_ports_closed` kgsm events
+      (`EVENT_CONFIGS` + constants + `events.sh` payload case rendering `Ports` as the canonical structured
+      `[{start,end,protocol}]` via `__ufw_ports_to_json` + `--argjson`) and emit them from the **bash command
+      layer**. **C# emission resolved to vocabulary-only:** the two event types are mirrored in kgsm-lib
+      (`EventTypes.cs` + `KgsmJsonContext` + `EventService` map, kgsm-lib → **1.12.0**) so the C# **receive**
+      path decodes them and kgsm-api can emit via `EmitWithProvenance(actor, origin=api)` when M6 lands —
+      but `FirewallService` still emits **nothing** (honors the Inc 2 transport-only decision; emission is
+      the caller's job, never the transport client). Tests: new `test_firewall_logic.sh` (stub-binary
+      exit-code mapping + token conversion), rewritten `test_files_ufw_logic.sh` (cutover via injected stub),
+      `test_events_logic.sh` (35 events), and an `instance_ports_opened` structured-payload integration test.
 - [ ] **Inc 4 (= Phase 4) — strip the embedded direct-ufw path** once the authority is proven.
 - [x] **Follow-up — daemon idle-exit (BUILT 2026-06-15).** The daemon now exits after
       `KGSM_FIREWALL_IDLE_TIMEOUT` seconds with no connections (default 30; `0` = resident; a positive value

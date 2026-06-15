@@ -35,9 +35,17 @@ sequence. This file is the working-rules summary; that doc is the source of trut
   on an unreachable authority), `AddKgsmFirewallClient`, kgsm-lib → 1.11.0. **Transport-only**: the client
   emits NO events — audit-event emission is deferred to Inc 3 (where it lands with the kgsm-bash event
   definition), kept out of the transport client so a missing event service can't silently drop the audit.
-- **Increment 3 — not built:** kgsm bash cutover (`files.ufw.sh` → call the authority; hard-fail when it's
-  down) + **defining** the new `instance_ports_opened`/`instance_ports_closed` kgsm events and emitting
-  them from both the bash path and the C# path (kgsm-lib `EmitWithProvenance`).
+- **Increment 3 — BUILT (kgsm + kgsm-lib, 2026-06-16):** kgsm bash cutover — `files.ufw.sh` now routes
+  through a new IPC chokepoint `commands/handlers/firewall.sh` that shells the bundled CLI
+  (`ensure-open`/`remove`), replacing `$SUDO mv/chown/ufw`; new `EC_FIREWALL_UNREACHABLE` maps the CLI's
+  exit-3 (authority down) distinct from `EC_UFW` (exit 4/5). **Asymmetric hard-fail:** enable/install aborts
+  on unreachable; disable/uninstall warns + continues (never wedge uninstall). **Defined** the new
+  `instance_ports_opened`/`instance_ports_closed` kgsm events (param spec `instance ports`; payload renders
+  `Ports` as the canonical structured `[{start,end,protocol}]`) and emits them from the bash command layer;
+  only a confirmed open/close emits. **C# emission is vocabulary-only** — the two types are mirrored in
+  kgsm-lib (1.12.0) so the receive path decodes them and kgsm-api can emit via `EmitWithProvenance` at M6,
+  but `FirewallService` still emits nothing (the Inc 2 transport-only decision stands; emission is the
+  caller's job).
 
 ## Invariants (do not break)
 
