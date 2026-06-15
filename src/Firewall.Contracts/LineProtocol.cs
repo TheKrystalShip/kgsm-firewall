@@ -1,15 +1,16 @@
 using System.Net.Sockets;
 using System.Text;
 
-namespace TheKrystalShip.KGSM.Firewall.Wire;
+namespace TheKrystalShip.KGSM.Firewall.Contracts;
 
 /// <summary>
-/// The newline framing shared by the daemon and the bundled client: exactly one JSON line per
-/// direction. A reader stops at the first <c>'\n'</c> or at EOF (so a client may either terminate its
-/// request with a newline or half-close its send side). Reads are bounded — this is a root daemon
-/// reading a socket, so an unbounded line is a denial-of-service hole, not a convenience.
+/// The newline framing shared by the daemon and its clients (the bundled CLI and kgsm-lib's
+/// <c>FirewallService</c>): exactly one JSON line per direction. A reader stops at the first
+/// <c>'\n'</c> or at EOF (so a client may either terminate its request with a newline or half-close its
+/// send side). Reads are bounded — this is a root daemon reading a socket, so an unbounded line is a
+/// denial-of-service hole, not a convenience.
 /// </summary>
-internal static class LineProtocol
+public static class LineProtocol
 {
     /// <summary>Default cap on a single request/response line (64 KiB — orders of magnitude above any
     /// real firewall request, which is a handful of ports).</summary>

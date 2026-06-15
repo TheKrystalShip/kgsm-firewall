@@ -34,14 +34,30 @@ none`.
       real `AF_UNIX` socket); AOT publish clean. **Live-validated** end-to-end: real `systemd-socket-activate`
       FD adoption against the published binary, and a full install (units + root daemon + real ufw 0.36.2)
       open→verify→list→remove round-trip via the unprivileged client.
-- [ ] **Inc 2 — kgsm-lib `IFirewallService` + `Firewall.Contracts` package.** Contract DTOs defined HERE
-      (own `PortSpec`-shaped types, **no kgsm-lib `PortMapping` reference** — cycle), packed to local-nuget;
-      kgsm-lib's `IFirewallService` (parallel to `IWatchdogClient`) maps `PortMapping`↔DTO at the boundary
-      and owns the C#-side audit-event emission via `EmitWithProvenance(actor, origin=api)`.
-- [ ] **Inc 3 — kgsm bash cutover (hard-fail).** `commands/handlers/files.ufw.sh` → call the authority
-      instead of `$SUDO mv/chown/ufw`; keep exit codes 215/216; new dedicated EC code + explicit message
-      when the authority is unreachable. Define + emit the new `instance_ports_opened`/
-      `instance_ports_closed` kgsm events from the command layer. Update `test_files_ufw_logic.sh`.
+- [x] **Inc 2 — kgsm-lib `IFirewallService` + `Firewall.Contracts` package (BUILT 2026-06-15).** The wire
+      contract became a standalone **`src/Firewall.Contracts`** project (net9.0 — the tighter of kgsm-lib's
+      net9.0 and the daemon's net10.0; AOT/trim-clean; **no kgsm-lib reference** — own `PortDto`, never
+      `PortMapping`; packed `TheKrystalShip.KGSM.Firewall.Contracts` 1.0.0 → local-nuget): the public
+      `FirewallRequest`/`FirewallResponse` + `PortDto`/`OwnedRuleDto`/`CapabilitiesDto`, the
+      `FirewallOps`/`Outcomes` tokens, `LineProtocol`, and the source-gen `WireJsonContext`. The **daemon
+      now consumes that package** (the internal `Wire/` was deleted — one definition, no drift); pure move,
+      112 tests still green + AOT 0-warn + socket-activate smoke. In kgsm-lib: `IFirewallService` (parallel
+      to `IWatchdogClient`) + `FirewallService` — an **NDJSON-over-unix-socket** client (the authority is
+      not HTTP) that maps `PortMapping`↔`PortDto` at the boundary, returns **outcome-distinct** result types
+      (`FirewallActionResult.Outcome`, `FirewallListResult.Status` with **honest `Unknown`** — never a
+      bare bool), throws `FirewallException` when the authority is **unreachable** (the C# analog of the
+      unreachable exit code, distinct from a reachable-but-unsuccessful result), registered via
+      `AddKgsmFirewallClient`; kgsm-lib → **1.11.0**. **Transport-only by design** — the client emits NO
+      events (see Inc 3); keeping emission out of the transport client (mirroring `WatchdogClient`) means a
+      missing event service can never silently drop the audit trail.
+- [ ] **Inc 3 — kgsm bash cutover (hard-fail) + the new events.** `commands/handlers/files.ufw.sh` → call
+      the authority instead of `$SUDO mv/chown/ufw`; keep exit codes 215/216; new dedicated EC code +
+      explicit message when the authority is unreachable. **Define** the new `instance_ports_opened`/
+      `instance_ports_closed` kgsm events (kgsm `EVENT_CONFIGS` + `events.sh` JSON case + test — `events
+      emit` validates the type, so they cannot be emitted until defined) **and emit them from BOTH paths**:
+      the bash command layer, and the C# path via kgsm-lib `IEventManagementService.EmitWithProvenance(actor,
+      origin=api)` (the emission deferred out of Inc 2 — it lands here, against one freshly-defined
+      vocabulary). Update `test_files_ufw_logic.sh`.
 - [ ] **Inc 4 (= Phase 4) — strip the embedded direct-ufw path** once the authority is proven.
 - [x] **Follow-up — daemon idle-exit (BUILT 2026-06-15).** The daemon now exits after
       `KGSM_FIREWALL_IDLE_TIMEOUT` seconds with no connections (default 30; `0` = resident; a positive value

@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Firewall.Contracts/Firewall.Contracts.csproj" />
     <Project Path="src/Firewall/Firewall.csproj" />
   </Folder>
   <Folder Name="/tests/">

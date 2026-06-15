@@ -1,5 +1,5 @@
+using TheKrystalShip.KGSM.Firewall.Contracts;
 using TheKrystalShip.KGSM.Firewall.Core;
-using TheKrystalShip.KGSM.Firewall.Wire;
 
 namespace TheKrystalShip.KGSM.Firewall.Host;
 

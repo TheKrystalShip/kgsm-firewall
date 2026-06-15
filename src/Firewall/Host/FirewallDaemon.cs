@@ -1,8 +1,8 @@
 using System.Net.Sockets;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using TheKrystalShip.KGSM.Firewall.Contracts;
 using TheKrystalShip.KGSM.Firewall.Core;
-using TheKrystalShip.KGSM.Firewall.Wire;
 
 namespace TheKrystalShip.KGSM.Firewall.Host;
 

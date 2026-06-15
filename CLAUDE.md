@@ -26,10 +26,18 @@ sequence. This file is the working-rules summary; that doc is the source of trut
     against the idle delay; it exits only when no handler is in flight and no connection has landed, so an
     in-flight `ufw` write is never abandoned. `.service` carries `StartLimitIntervalSec=0` so activate/
     idle-exit bursts can't trip systemd's rate limit (→ unreachable → Inc-3 hard-fail abort).
-- **Increment 2 — not built:** kgsm-lib `IFirewallService` (parallel to `IWatchdogClient`) + a shared
-  `TheKrystalShip.KGSM.Firewall.Contracts` NuGet + the C#-side audit-event emission.
+- **Increment 2 — BUILT (this repo + kgsm-lib):** the wire contract is now the standalone
+  `src/Firewall.Contracts` project (net9.0, AOT/trim-clean, no kgsm-lib ref), packed as
+  `TheKrystalShip.KGSM.Firewall.Contracts` 1.0.0 → local-nuget; the daemon **consumes that package** (the
+  internal `Wire/` is gone — one definition, no drift). kgsm-lib gained `IFirewallService` +
+  `FirewallService` (an NDJSON-over-unix-socket client — the authority is not HTTP — mapping
+  `PortMapping`↔`PortDto`, with outcome-distinct result types + honest `Unknown` and a `FirewallException`
+  on an unreachable authority), `AddKgsmFirewallClient`, kgsm-lib → 1.11.0. **Transport-only**: the client
+  emits NO events — audit-event emission is deferred to Inc 3 (where it lands with the kgsm-bash event
+  definition), kept out of the transport client so a missing event service can't silently drop the audit.
 - **Increment 3 — not built:** kgsm bash cutover (`files.ufw.sh` → call the authority; hard-fail when it's
-  down) + the new `instance_ports_opened`/`instance_ports_closed` kgsm events.
+  down) + **defining** the new `instance_ports_opened`/`instance_ports_closed` kgsm events and emitting
+  them from both the bash path and the C# path (kgsm-lib `EmitWithProvenance`).
 
 ## Invariants (do not break)
 

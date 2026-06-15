@@ -36,11 +36,19 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Logging only; no DI/hosting pulled in yet (the socket host lands in a later increment). The
+    <!-- Logging only; no DI/hosting pulled in (a console host + raw unix socket, no ASP.NET). The
          abstractions package is AOT-safe and reflection-free. NO TheKrystalShip.KGSM.Lib reference:
          kgsm-firewall must not depend on kgsm-lib (kgsm-lib consumes Firewall.Contracts, not vice
          versa) — that would be a dependency cycle. -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The wire contract now lives in the standalone Contracts package — one definition shared with
+         kgsm-lib so the two cannot drift. The daemon consumes it as a project reference (the same
+         project is packed to local-nuget for kgsm-lib to resolve). A net9.0 lib inside this net10.0
+         AOT app publishes clean; verified by the 0-warn ILC gate. -->
+    <ProjectReference Include="..\Firewall.Contracts\Firewall.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

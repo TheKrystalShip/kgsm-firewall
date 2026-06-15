@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <RootNamespace>TheKrystalShip.KGSM.Firewall.Contracts</RootNamespace>
+    <AssemblyName>TheKrystalShip.KGSM.Firewall.Contracts</AssemblyName>
+
+    <!-- net9.0, NOT net10.0: this package is consumed by kgsm-lib (net9.0) as well as the net10.0
+         AOT daemon, and the tighter constraint wins (a net10 app references a net9 lib fine, not the
+         reverse). Reflection-free (source-generated JSON) and trim/AOT-clean so neither consumer's
+         publish warns — the daemon is Native-AOT and kgsm-lib is IsAotCompatible. NO kgsm-lib /
+         TheKrystalShip.KGSM.Lib reference: kgsm-lib consumes THIS package, not the other way round
+         (that would be a dependency cycle), and this package owns its own PortDto, never kgsm-lib's
+         PortMapping. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- NuGet packaging (resolved by kgsm-lib from the local-nuget folder feed). -->
+    <PackageId>TheKrystalShip.KGSM.Firewall.Contracts</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>TheKrystalShip</Authors>
+    <Description>Wire contracts for the kgsm-firewall host-firewall authority control socket: the
+      newline-delimited-JSON request/response DTOs, the op/outcome tokens, the framing, and the
+      source-generated JSON context. Consumed by kgsm-lib's IFirewallService; the daemon shares this
+      single definition so the two cannot drift.</Description>
+    <PackageReleaseNotes>1.0.0 — initial public wire contract. FirewallRequest / FirewallResponse plus
+      the PortDto / OwnedRuleDto / CapabilitiesDto payloads, the FirewallOps and Outcomes string
+      tokens, the LineProtocol newline framing, and the source-generated WireJsonContext. Lifted
+      verbatim from the daemon's internal Wire layer (Inc 1) and made public so kgsm-lib and the
+      kgsm-firewall daemon speak one definition.</PackageReleaseNotes>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeSymbols>false</IncludeSymbols>
+  </PropertyGroup>
+
+</Project>
