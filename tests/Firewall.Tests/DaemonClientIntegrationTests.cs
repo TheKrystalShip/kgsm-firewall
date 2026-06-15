@@ -37,7 +37,9 @@ public class DaemonClientIntegrationTests
             _listener.Listen(16);
 
             var service = new FirewallService(driver, NullLogger<FirewallService>.Instance);
-            var daemon = new FirewallDaemon(_listener, service, backend, NullLogger<FirewallDaemon>.Instance);
+            // TimeSpan.Zero = resident: these request/response tests drive the daemon explicitly and tear it
+            // down via the CTS, so idle-exit must stay out of the way. Idle-exit has its own tests below.
+            var daemon = new FirewallDaemon(_listener, service, backend, TimeSpan.Zero, NullLogger<FirewallDaemon>.Instance);
             _serve = daemon.RunAsync(_cts.Token);
         }
 
@@ -180,5 +182,110 @@ public class DaemonClientIntegrationTests
         int code = await FirewallCliClient.RunAsync("backend", [], options, default);
 
         Assert.Equal(ExitCodes.Unreachable, code);
+    }
+
+    // ---- idle-exit (the Inc-1 follow-up) ----
+    //
+    // The daemon honours the idle timeout unconditionally; DaemonHost is what gates it on socket
+    // activation (resident otherwise). These drive FirewallDaemon directly so the timeout is exercised in
+    // isolation, without external cancellation — the daemon must end RunAsync ON ITS OWN.
+
+    private static (Socket listener, string path) BindTempSocket()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"kgfw-idle-{Guid.NewGuid():N}.sock");
+        var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        listener.Bind(new UnixDomainSocketEndPoint(path));
+        listener.Listen(16);
+        return (listener, path);
+    }
+
+    [Fact]
+    public async Task IdleTimeout_NoConnections_DaemonExitsWithoutCancellation()
+    {
+        var (listener, path) = BindTempSocket();
+        try
+        {
+            var service = new FirewallService(new NullFirewallDriver(FirewallBackend.Ufw), NullLogger<FirewallService>.Instance);
+            var daemon = new FirewallDaemon(
+                listener, service, FirewallBackend.Ufw, TimeSpan.FromMilliseconds(150), NullLogger<FirewallDaemon>.Instance);
+
+            Task serve = daemon.RunAsync(CancellationToken.None);
+
+            // No token is ever cancelled: the daemon must return once the idle window elapses.
+            Task finished = await Task.WhenAny(serve, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.Same(serve, finished);
+            await serve; // observe clean completion (no exception)
+        }
+        finally
+        {
+            listener.Dispose();
+            try { File.Delete(path); } catch { /* best-effort */ }
+        }
+    }
+
+    [Fact]
+    public async Task IdleTimeoutZero_StaysResident()
+    {
+        var (listener, path) = BindTempSocket();
+        using var cts = new CancellationTokenSource();
+        try
+        {
+            var service = new FirewallService(new NullFirewallDriver(FirewallBackend.Ufw), NullLogger<FirewallService>.Instance);
+            var daemon = new FirewallDaemon(
+                listener, service, FirewallBackend.Ufw, TimeSpan.Zero, NullLogger<FirewallDaemon>.Instance);
+
+            Task serve = daemon.RunAsync(cts.Token);
+
+            // Zero disables idle-exit: still running well after any idle window would have elapsed.
+            Task finished = await Task.WhenAny(serve, Task.Delay(TimeSpan.FromMilliseconds(500)));
+            Assert.NotSame(serve, finished);
+            Assert.False(serve.IsCompleted);
+
+            await cts.CancelAsync();
+            await serve.WaitAsync(TimeSpan.FromSeconds(5)); // only the token ends it
+        }
+        finally
+        {
+            listener.Dispose();
+            try { File.Delete(path); } catch { /* best-effort */ }
+        }
+    }
+
+    [Fact]
+    public async Task IdleTimeout_DoesNotExitWhileHandlerBusy_ThenExitsWhenIdle()
+    {
+        var (listener, path) = BindTempSocket();
+        var release = new TaskCompletionSource();
+        var driver = new FakeFirewallDriver { OnEnsureOpen = _ => release.Task };
+        try
+        {
+            var service = new FirewallService(driver, NullLogger<FirewallService>.Instance);
+            var daemon = new FirewallDaemon(
+                listener, service, FirewallBackend.Ufw, TimeSpan.FromMilliseconds(150), NullLogger<FirewallDaemon>.Instance);
+            Task serve = daemon.RunAsync(CancellationToken.None);
+
+            var options = new FirewallOptions { SocketPath = path };
+            // The handler blocks in the driver hook, so it stays "in flight" until we release it.
+            Task<int> client = FirewallCliClient.RunAsync("ensure-open", ["factorio", "34197/udp"], options, default);
+
+            // Several idle windows pass; the daemon must NOT exit while a handler is active — abandoning a
+            // fire-and-forget handler mid-ufw-write is exactly what the active-connection guard prevents.
+            await Task.Delay(TimeSpan.FromMilliseconds(600));
+            Assert.False(serve.IsCompleted);
+            Assert.False(client.IsCompleted);
+
+            release.SetResult();                                   // handler finishes -> active drops to 0
+            Assert.Equal(ExitCodes.Success, await client);
+
+            // Now genuinely idle: the daemon exits on its own.
+            Task finished = await Task.WhenAny(serve, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.Same(serve, finished);
+            await serve;
+        }
+        finally
+        {
+            listener.Dispose();
+            try { File.Delete(path); } catch { /* best-effort */ }
+        }
     }
 }

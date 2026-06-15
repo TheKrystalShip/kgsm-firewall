@@ -8,9 +8,11 @@ privileged **reads** (is this port open) so that no other component ever shells 
 > **Status:** **Increments 0 + 1 built** (this repo). Inc 0 = core domain + ufw driver. Inc 1 = the
 > socket-activated daemon (systemd `.socket`+`.service`, real FD adoption) + the bundled CLI client
 > (`ensure-open`/`remove`/`list`/`backend`) + exit-code contract — live-validated end-to-end against real
-> systemd socket activation and real ufw. The kgsm-lib `IFirewallService` + `Firewall.Contracts` package
-> (Inc 2) and the kgsm bash cutover (Inc 3) are not built yet. The authoritative design + build sequence
-> live in **`../headless-network-plan.md` §7 (and §7h for the increments)** — read that first.
+> systemd socket activation and real ufw. The daemon **idle-exits** after `KGSM_FIREWALL_IDLE_TIMEOUT`s
+> (default 30; `0` = resident) so it doesn't hold root 24/7 — systemd re-activates it on the next
+> connection. The kgsm-lib `IFirewallService` + `Firewall.Contracts` package (Inc 2) and the kgsm bash
+> cutover (Inc 3) are not built yet. The authoritative design + build sequence live in
+> **`../headless-network-plan.md` §7 (and §7h for the increments)** — read that first.
 
 ## Why it exists
 

@@ -6,12 +6,20 @@ Documentation=https://github.com/TheKrystalShip
 Requires=kgsm-firewall.socket
 After=kgsm-firewall.socket
 
+# On-demand activation + idle-exit means many quick start/exit cycles are normal (each burst of firewall
+# ops wakes the daemon; it then idle-exits). Disable systemd's start-rate limit so a tight burst can never
+# trip it and refuse to re-activate — under the Inc-3 hard-fail contract an unreachable authority aborts a
+# firewall-enabled install. (Idle-exit returns 0, so Restart=on-failure never fires on it either.)
+StartLimitIntervalSec=0
+
 [Service]
 Type=simple
 # Native-AOT single-file binary. Runs as ROOT: it must drive `ufw` (privileged) and write profile files
 # under /etc/ufw/applications.d. Unlike kgsm-watchdog it spawns no untrusted children and does NOT drop
 # privilege after boot — the socket's filesystem perms (root:kgsm 0660, set on the .socket unit) are the
-# only access boundary. The daemon adopts systemd's socket (fd 3) and serves until stopped.
+# only access boundary. The daemon adopts systemd's socket (fd 3), serves, and idle-exits after
+# KGSM_FIREWALL_IDLE_TIMEOUT seconds with no connections (default 30) so it does not hold root 24/7 —
+# systemd re-activates it on the next connection. Set the timeout to 0 to keep it resident.
 ExecStart=/opt/kgsm-firewall/kgsm-firewall serve
 
 # The socket path the binary advertises to its bundled client must match the .socket unit's ListenStream.

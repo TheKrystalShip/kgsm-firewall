@@ -26,6 +26,14 @@ internal static class DaemonHost
         IFirewallDriver driver = DriverFactory.Create(backend, options, runner, loggers);
         var service = new FirewallService(driver, loggers.CreateLogger<FirewallService>());
 
+        // Idle-exit only makes sense under socket activation, where systemd re-spawns us on the next
+        // connection; a manual/dev run has nothing to bring it back, so it stays resident. Read this
+        // BEFORE Acquire(), which clears the LISTEN_* env vars that IsActivated() inspects.
+        bool activated = SocketActivation.IsActivated();
+        TimeSpan idleTimeout = activated ? options.IdleTimeout : TimeSpan.Zero;
+        if (!activated && options.IdleTimeout > TimeSpan.Zero)
+            boot.LogInformation("idle-exit disabled: not socket-activated, so nothing would re-spawn the daemon — staying resident");
+
         Socket listener;
         try
         {
@@ -39,7 +47,7 @@ internal static class DaemonHost
 
         using (listener)
         {
-            var daemon = new FirewallDaemon(listener, service, backend, loggers.CreateLogger<FirewallDaemon>());
+            var daemon = new FirewallDaemon(listener, service, backend, idleTimeout, loggers.CreateLogger<FirewallDaemon>());
             await daemon.RunAsync(ct).ConfigureAwait(false);
         }
         return 0;

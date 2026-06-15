@@ -19,6 +19,13 @@ sequence. This file is the working-rules summary; that doc is the source of trut
   boot-reconcile loop by design: ufw persists its own rules in `/etc/ufw` (replayed at boot by
   `ufw.service`), so the socket-activated daemon need not run at boot — verified the rule lands in
   `user.rules`.
+  - **Idle-exit (Inc-1 follow-up, BUILT):** the daemon exits after `KGSM_FIREWALL_IDLE_TIMEOUT`s with no
+    connections (default 30; `0` = resident; positive values <5 clamped to 5) so it does not hold root
+    24/7 — systemd re-activates on the next connection. Gated on socket activation (a manual run stays
+    resident — nothing would re-spawn it). The accept loop holds one outstanding accept and races it
+    against the idle delay; it exits only when no handler is in flight and no connection has landed, so an
+    in-flight `ufw` write is never abandoned. `.service` carries `StartLimitIntervalSec=0` so activate/
+    idle-exit bursts can't trip systemd's rate limit (→ unreachable → Inc-3 hard-fail abort).
 - **Increment 2 — not built:** kgsm-lib `IFirewallService` (parallel to `IWatchdogClient`) + a shared
   `TheKrystalShip.KGSM.Firewall.Contracts` NuGet + the C#-side audit-event emission.
 - **Increment 3 — not built:** kgsm bash cutover (`files.ufw.sh` → call the authority; hard-fail when it's

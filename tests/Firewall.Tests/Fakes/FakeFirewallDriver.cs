@@ -17,11 +17,18 @@ internal sealed class FakeFirewallDriver : IFirewallDriver
     public FirewallResult RemoveResult { get; set; } = FirewallResult.Removed();
     public OwnedRulesResult ListResult { get; set; } = OwnedRulesResult.Ok([]);
 
-    public Task<FirewallResult> EnsureOpenAsync(
+    /// <summary>Optional hook awaited inside <see cref="EnsureOpenAsync"/> — lets a test hold a handler
+    /// "in flight" (e.g. block on a <see cref="TaskCompletionSource"/>) to exercise the daemon's
+    /// active-connection guard against idle-exit.</summary>
+    public Func<CancellationToken, Task>? OnEnsureOpen { get; set; }
+
+    public async Task<FirewallResult> EnsureOpenAsync(
         string instance, IReadOnlyList<PortSpec> ports, CancellationToken ct = default)
     {
         EnsureOpenCalls++;
-        return Task.FromResult(EnsureResult);
+        if (OnEnsureOpen is not null)
+            await OnEnsureOpen(ct).ConfigureAwait(false);
+        return EnsureResult;
     }
 
     public Task<FirewallResult> RemoveAsync(string instance, CancellationToken ct = default)

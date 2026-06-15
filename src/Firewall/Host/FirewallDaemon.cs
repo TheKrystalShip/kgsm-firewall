@@ -18,6 +18,7 @@ internal sealed class FirewallDaemon(
     Socket listener,
     FirewallService service,
     FirewallBackend backend,
+    TimeSpan idleTimeout,
     ILogger<FirewallDaemon> logger)
 {
     // ufw takes a single global lock; concurrent `ufw app update`/`ufw allow` (plausible when autostart
@@ -26,32 +27,91 @@ internal sealed class FirewallDaemon(
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly string _backendToken = WireMapping.BackendToken(backend);
 
+    // Connections currently being handled (the fire-and-forget tasks). The idle-exit must never fire while
+    // any handler is mid-`ufw`-write: a graceful RunAsync return abandons those background tasks.
+    private int _activeConnections;
+
     public async Task RunAsync(CancellationToken ct)
     {
-        logger.LogInformation(
-            "kgsm-firewall daemon ready (backend={Backend}, canApply={CanApply})",
-            backend, service.Capabilities.CanApply);
+        if (idleTimeout > TimeSpan.Zero)
+            logger.LogInformation(
+                "kgsm-firewall daemon ready (backend={Backend}, canApply={CanApply}, idleExit={Idle:0.#}s)",
+                backend, service.Capabilities.CanApply, idleTimeout.TotalSeconds);
+        else
+            logger.LogInformation(
+                "kgsm-firewall daemon ready (backend={Backend}, canApply={CanApply}, resident)",
+                backend, service.Capabilities.CanApply);
 
-        while (!ct.IsCancellationRequested)
+        // One outstanding accept, reused across idle re-races. We never cancel + re-issue an accept on the
+        // same listener (that reuse-after-cancel behaviour is the one thing we'd rather not depend on); the
+        // accept is only ever torn down at real shutdown, when the caller disposes the listener.
+        Task<Socket>? acceptTask = null;
+        try
         {
-            Socket connection;
-            try
+            while (!ct.IsCancellationRequested)
             {
-                connection = await listener.AcceptAsync(ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "accept failed; continuing");
-                continue;
-            }
+                acceptTask ??= listener.AcceptAsync(ct).AsTask();
 
-            // Each connection is independent and self-contained; handle it off the accept loop so a slow
-            // peer never stalls new connections. The driver-touching work inside is still serialised by _gate.
-            _ = HandleConnectionAsync(connection, ct);
+                if (idleTimeout > TimeSpan.Zero)
+                {
+                    // Race the pending accept against the idle window. The delay carries no token: at
+                    // shutdown the accept itself faults on `ct`, winning the race, so a token here would
+                    // only add an unobserved cancelled task each loop. A losing delay completes harmlessly.
+                    Task winner = await Task.WhenAny(acceptTask, Task.Delay(idleTimeout)).ConfigureAwait(false);
+                    if (winner != acceptTask)
+                    {
+                        if (ct.IsCancellationRequested)
+                            break;
+
+                        // Exit only when truly quiescent: no handler in flight, and no connection that
+                        // slipped onto the still-pending accept between the timer firing and this check
+                        // (accepting it here would orphan it — systemd only re-delivers what we never
+                        // accept()ed). Otherwise loop and re-race the SAME acceptTask.
+                        if (Volatile.Read(ref _activeConnections) == 0 && !acceptTask.IsCompleted)
+                        {
+                            logger.LogInformation(
+                                "idle for {Seconds:0.#}s with no activity; exiting (systemd re-activates on the next connection)",
+                                idleTimeout.TotalSeconds);
+                            break;
+                        }
+                        continue;
+                    }
+                }
+
+                Socket connection;
+                try
+                {
+                    connection = await acceptTask.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "accept failed; continuing");
+                    acceptTask = null;
+                    continue;
+                }
+                acceptTask = null;
+
+                // Each connection is independent and self-contained; handle it off the accept loop so a slow
+                // peer never stalls new connections. The driver-touching work inside is still serialised by _gate.
+                Interlocked.Increment(ref _activeConnections);
+                _ = HandleConnectionAsync(connection, ct);
+            }
+        }
+        finally
+        {
+            // An accept may still be outstanding (idle-exit always leaves one pending; shutdown may). The
+            // caller is about to dispose the listener, faulting it — observe that so it isn't an unobserved
+            // exception, and close any connection that landed but went unconsumed.
+            if (acceptTask is not null)
+                _ = acceptTask.ContinueWith(static t =>
+                {
+                    if (t.IsCompletedSuccessfully) t.Result.Dispose();
+                    else _ = t.Exception;
+                }, TaskScheduler.Default);
         }
 
         logger.LogInformation("kgsm-firewall daemon shutting down");
@@ -59,9 +119,9 @@ internal sealed class FirewallDaemon(
 
     private async Task HandleConnectionAsync(Socket connection, CancellationToken ct)
     {
-        using (connection)
+        try
         {
-            try
+            using (connection)
             {
                 string? line = await LineProtocol.ReadLineAsync(connection, LineProtocol.DefaultMaxBytes, ct)
                     .ConfigureAwait(false);
@@ -73,11 +133,15 @@ internal sealed class FirewallDaemon(
                 byte[] payload = JsonSerializer.SerializeToUtf8Bytes(response, WireJsonContext.Default.FirewallResponse);
                 await LineProtocol.WriteLineAsync(connection, payload, ct).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) { /* shutting down */ }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "error handling connection");
-            }
+        }
+        catch (OperationCanceledException) { /* shutting down */ }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "error handling connection");
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _activeConnections);
         }
     }
 
