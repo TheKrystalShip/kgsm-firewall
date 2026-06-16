@@ -84,6 +84,26 @@ public class DaemonClientIntegrationTests
     }
 
     [Fact]
+    public async Task EnsureOpen_UfwInactive_StillExit0_RuleStagedNotAFailure()
+    {
+        // ufw is installed but DISABLED: `allow` succeeds (rule persisted) and the post-allow `status`
+        // reports inactive -> the daemon replies `applied-inactive`. The bundled CLI must map that to
+        // Success, NOT OpFailed — else a kgsm install on an inactive-ufw host would abort under the
+        // hard-fail contract even though the rule is correctly owned (it enforces on `ufw enable`).
+        await using var h = Harness.Ufw((file, args) =>
+            args.Count > 0 && args[0] == "status"
+                ? new ProcessResult(0, "Status: inactive", "")
+                : new ProcessResult(0, "", ""));
+
+        int code = await FirewallCliClient.RunAsync(
+            "ensure-open", ["factorio", "34197/udp"], h.Options, default);
+
+        Assert.Equal(ExitCodes.Success, code);
+        Assert.True(h.Store.Files.ContainsKey("kgsm-factorio")); // rule still owned, not rolled back
+        Assert.True(h.Runner.WasCalledWith("ufw", "allow", "kgsm-factorio"));
+    }
+
+    [Fact]
     public async Task EnsureOpen_UfwAllowFails_Exit5()
     {
         await using var h = Harness.Ufw((file, args) =>

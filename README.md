@@ -223,6 +223,14 @@ kgsm-firewall backend                        # -> backend=ufw apply=True remove=
 > *enforcing*, and ufw enforces nothing while inactive. This is expected: the rules are saved and become
 > active the moment you run `sudo ufw enable`. The health-check script reports this as a `WARN`, not a
 > failure, for exactly this reason.
+>
+> Since **Firewall.Contracts 1.1.0** the daemon makes this state explicit rather than implicit: a successful
+> `ensure-open` against an inactive backend replies with the `applied-inactive` outcome (the CLI prints
+> "staged … — ufw is inactive (enforces on `ufw enable`)" and still exits `0`), and every `list` reply now
+> carries an `enforcement` field (`enforcing` \| `inactive` \| `unknown`). A consumer (e.g. kgsm-api) uses
+> this to report the host honestly — an inactive backend filters nothing, so every port is reachable
+> *without* protection, which is a different fact from "open because a rule allows it". An inactive backend's
+> empty rule set must **never** be read as "closed".
 
 ---
 

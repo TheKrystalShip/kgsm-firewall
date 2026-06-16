@@ -50,6 +50,15 @@ internal sealed class UfwDriver(
             return FirewallResult.Failed($"ufw allow {name} failed: {detail}");
         }
 
+        // The rule is written either way; whether it is ENFORCED depends on ufw's runtime state. When ufw
+        // is inactive the rule is staged (persisted for the operator's next `ufw enable`) and the port is
+        // open anyway (nothing filters) — report AppliedInactive so the caller can say "staged, not yet
+        // enforced" rather than imply an enforced open. One extra `ufw status` on this rare op.
+        ProcessResult status = await runner.RunAsync("ufw", ["status"], ct).ConfigureAwait(false);
+        if (status.Ok && EnforcementFromStatus(status.Stdout) == Enforcement.Inactive)
+            return FirewallResult.AppliedInactive(
+                $"staged {ports.Count} spec(s) under {name} — ufw is inactive (enforces on `ufw enable`)");
+
         return FirewallResult.Applied($"opened {ports.Count} spec(s) under {name}");
     }
 
@@ -74,6 +83,11 @@ internal sealed class UfwDriver(
         if (!status.Ok)
             return OwnedRulesResult.Unknown;
 
+        // Read the backend's enforcement state from the same `ufw status` output. When inactive, ufw lists
+        // no rules (so the loop below finds none) BUT nothing is filtered — the consumer uses this to mark
+        // every port reachable rather than read the empty rule set as "closed". Never discard this.
+        Enforcement enforcement = EnforcementFromStatus(status.Stdout);
+
         var rules = new List<OwnedRule>();
         foreach (string profileName in profiles.ListOwnedNames())
         {
@@ -91,7 +105,21 @@ internal sealed class UfwDriver(
             rules.Add(new OwnedRule(owned, portList));
         }
 
-        return OwnedRulesResult.Ok(rules);
+        return OwnedRulesResult.Ok(rules, enforcement);
+    }
+
+    /// <summary>
+    /// The backend's enforcement state from <c>ufw status</c> output: the leading <c>Status: active</c> /
+    /// <c>Status: inactive</c> line (same token <see cref="Core.BackendDetector"/> keys on). Anything else
+    /// (an unexpected shape) is honest <see cref="Enforcement.Unknown"/>, never guessed.
+    /// </summary>
+    internal static Enforcement EnforcementFromStatus(string statusStdout)
+    {
+        if (statusStdout.Contains("Status: active", StringComparison.OrdinalIgnoreCase))
+            return Enforcement.Enforcing;
+        if (statusStdout.Contains("Status: inactive", StringComparison.OrdinalIgnoreCase))
+            return Enforcement.Inactive;
+        return Enforcement.Unknown;
     }
 
     private static readonly string[] UfwActions = ["ALLOW", "DENY", "LIMIT", "REJECT"];

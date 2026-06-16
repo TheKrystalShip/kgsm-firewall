@@ -27,12 +27,32 @@ public static class FirewallOps
 public static class Outcomes
 {
     public const string Applied = "applied";
+    /// <summary>The rule was written/staged, but the backend is NOT enforcing (e.g. ufw inactive): the
+    /// rule persists and takes effect on the operator's next <c>ufw enable</c>, and meanwhile the port is
+    /// open anyway because nothing is filtering. A success (the desired config is in place) — distinct from
+    /// <see cref="Applied"/> so the caller can say "staged, not yet enforced" honestly.</summary>
+    public const string AppliedInactive = "applied-inactive";
     public const string Removed = "removed";
     public const string NoOp = "noop";
     public const string Ok = "ok";            // a successful read/backend query
     public const string Unknown = "unknown";  // list: backend genuinely cannot answer (honest unknown)
     public const string Unsupported = "unsupported";
     public const string Failed = "failed";
+}
+
+/// <summary>
+/// The backend's runtime <b>enforcement</b> state, carried in <see cref="FirewallResponse.Enforcement"/>
+/// (added in 1.1.0; null on a pre-1.1.0 daemon → the client reads it as <see cref="Unknown"/>). Distinct
+/// from "are there rules": a backend can be installed yet <see cref="Inactive"/> (ufw disabled), in which
+/// case it filters NOTHING — so every port is reachable regardless of rules. The consumer needs this to
+/// compute an honest <c>open</c> verdict: enforcing → open iff a rule allows it; inactive → open (all);
+/// unknown → unknown. NEVER infer "closed" from an inactive backend.
+/// </summary>
+public static class Enforcements
+{
+    public const string Enforcing = "enforcing"; // the backend is active and filtering
+    public const string Inactive = "inactive";   // installed but not enforcing (e.g. `ufw` disabled) → all open
+    public const string Unknown = "unknown";     // cannot determine (non-root / absent / unparsable)
 }
 
 /// <summary>One port spec on the wire: a single port (<c>Start == End</c>) or an inclusive range, for one
@@ -55,6 +75,8 @@ public sealed record CapabilitiesDto(bool CanApply, bool CanRemove, bool CanList
 /// carries the precise status (an <see cref="Outcomes"/> token) the caller maps to an exit code / typed
 /// result. <see cref="Backend"/> is always set to the active backend (useful on every reply).
 /// <see cref="Rules"/> is populated for list; <see cref="Capabilities"/> for backend.
+/// <see cref="Enforcement"/> (1.1.0) reports the backend's runtime enforcement state — populated on a list
+/// reply (an <see cref="Enforcements"/> token), null otherwise / on a pre-1.1.0 daemon.
 /// </summary>
 public sealed record FirewallResponse(
     bool Ok,
@@ -62,4 +84,5 @@ public sealed record FirewallResponse(
     string Backend,
     string? Detail = null,
     OwnedRuleDto[]? Rules = null,
-    CapabilitiesDto? Capabilities = null);
+    CapabilitiesDto? Capabilities = null,
+    string? Enforcement = null);

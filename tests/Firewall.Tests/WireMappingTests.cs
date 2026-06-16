@@ -44,6 +44,7 @@ public class WireMappingTests
 
     [Theory]
     [InlineData((int)FirewallStatus.Applied, Outcomes.Applied, true)]
+    [InlineData((int)FirewallStatus.AppliedInactive, Outcomes.AppliedInactive, true)] // staged-not-enforced is a success
     [InlineData((int)FirewallStatus.Removed, Outcomes.Removed, true)]
     [InlineData((int)FirewallStatus.NoOp, Outcomes.NoOp, true)]
     [InlineData((int)FirewallStatus.Unsupported, Outcomes.Unsupported, false)]
@@ -76,5 +77,26 @@ public class WireMappingTests
         Assert.Equal("factorio", rule.Instance);
         Assert.Equal(34197, rule.Ports[0].Start);
         Assert.Equal("udp", rule.Ports[0].Protocol);
+    }
+
+    // The 1.1.0 enforcement axis: every list reply carries the backend's enforcement token so the consumer
+    // can tell "inactive → all open" from "active + no rule → closed", never inferring closed from inactive.
+    [Theory]
+    [InlineData((int)Enforcement.Enforcing, Enforcements.Enforcing)]
+    [InlineData((int)Enforcement.Inactive, Enforcements.Inactive)]
+    [InlineData((int)Enforcement.Unknown, Enforcements.Unknown)]
+    public void ToResponse_OwnedRules_CarriesEnforcementToken(int enforcementInt, string token)
+    {
+        var owned = OwnedRulesResult.Ok([], (Enforcement)enforcementInt);
+        FirewallResponse response = WireMapping.ToResponse(owned, "ufw");
+        Assert.Equal(token, response.Enforcement);
+    }
+
+    [Fact]
+    public void ToResponse_OwnedRules_UnknownQuery_EnforcementUnknown()
+    {
+        // A can't-enumerate result knows neither rules nor enforcement → enforcement token is unknown.
+        FirewallResponse response = WireMapping.ToResponse(OwnedRulesResult.Unknown, "ufw");
+        Assert.Equal(Enforcements.Unknown, response.Enforcement);
     }
 }

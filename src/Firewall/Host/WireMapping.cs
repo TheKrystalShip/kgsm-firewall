@@ -58,6 +58,7 @@ internal static class WireMapping
         string outcome = result.Status switch
         {
             FirewallStatus.Applied => Outcomes.Applied,
+            FirewallStatus.AppliedInactive => Outcomes.AppliedInactive,
             FirewallStatus.Removed => Outcomes.Removed,
             FirewallStatus.NoOp => Outcomes.NoOp,
             FirewallStatus.Unsupported => Outcomes.Unsupported,
@@ -81,6 +82,17 @@ internal static class WireMapping
         for (int i = 0; i < result.Rules.Count; i++)
             rules[i] = new OwnedRuleDto(result.Rules[i].Instance, ToPortDtos(result.Rules[i].Ports));
 
-        return new FirewallResponse(result.Status == OwnedQueryStatus.Ok, outcome, backendToken, Rules: rules);
+        // The enforcement axis rides every list reply (1.1.0) so the consumer can tell "inactive → all open"
+        // from "active + no rule → closed" — never inferring "closed" from an inactive backend's empty set.
+        return new FirewallResponse(
+            result.Status == OwnedQueryStatus.Ok, outcome, backendToken,
+            Rules: rules, Enforcement: EnforcementToken(result.Enforcement));
     }
+
+    public static string EnforcementToken(Enforcement enforcement) => enforcement switch
+    {
+        Enforcement.Enforcing => Enforcements.Enforcing,
+        Enforcement.Inactive => Enforcements.Inactive,
+        _ => Enforcements.Unknown,
+    };
 }

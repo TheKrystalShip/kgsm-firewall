@@ -171,6 +171,9 @@ internal static class FirewallCliClient
         switch (r.Outcome)
         {
             case Outcomes.Applied:
+            case Outcomes.AppliedInactive: // rule staged; ufw is installed-but-inactive — a SUCCESS, not a
+                                           // failure. Mapping this to OpFailed would abort a kgsm install on
+                                           // an inactive-ufw host (the rule IS owned; it enforces on enable).
             case Outcomes.Removed:
             case Outcomes.NoOp:
                 if (!string.IsNullOrEmpty(r.Detail)) Console.WriteLine(r.Detail);

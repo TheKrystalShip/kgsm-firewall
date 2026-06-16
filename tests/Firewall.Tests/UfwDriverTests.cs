@@ -243,4 +243,79 @@ public class UfwDriverTests
             [new PortSpec(51820, 51825, PortProtocol.Udp), new PortSpec(51830, 51830, PortProtocol.Tcp)],
             rule.Ports);
     }
+
+    // --- 1.1.0 enforcement axis -------------------------------------------------------------------
+
+    private static FakeProcessRunner StatusRunner(string statusStdout) => new()
+    {
+        Handler = (_, args) => args.Count > 0 && args[0] == "status"
+            ? new ProcessResult(0, statusStdout, "")
+            : new ProcessResult(0, "", ""),
+    };
+
+    [Fact]
+    public async Task EnsureOpen_UfwInactive_ReturnsAppliedInactive()
+    {
+        // ufw inactive: `ufw allow` still succeeds (rule staged), but nothing is enforced — the driver
+        // must report the rule as staged-not-enforced, never a plain enforced Applied.
+        FirewallResult result = await Driver(StatusRunner("Status: inactive\n"), new InMemoryUfwProfileStore())
+            .EnsureOpenAsync("factorio", [new(34197, 34197, PortProtocol.Udp)]);
+
+        Assert.Equal(FirewallStatus.AppliedInactive, result.Status);
+        Assert.True(result.Ok); // still a success — the desired config is in place
+    }
+
+    [Fact]
+    public async Task EnsureOpen_UfwActive_ReturnsApplied()
+    {
+        FirewallResult result = await Driver(StatusRunner("Status: active\n"), new InMemoryUfwProfileStore())
+            .EnsureOpenAsync("factorio", [new(34197, 34197, PortProtocol.Udp)]);
+
+        Assert.Equal(FirewallStatus.Applied, result.Status);
+    }
+
+    [Fact]
+    public async Task ListOwned_InactiveStatus_ReportsInactiveEnforcement_NotClosed()
+    {
+        // The whole point of the axis: ufw inactive lists no rules, but enforcement is Inactive (not
+        // Enforcing) so the consumer marks the port OPEN/unfiltered rather than reading empty as "closed".
+        var store = new InMemoryUfwProfileStore();
+        store.Files["kgsm-factorio"] = UfwProfile.Render("factorio", [new(34197, 34197, PortProtocol.Udp)]);
+
+        OwnedRulesResult result = await Driver(StatusRunner("Status: inactive\n"), store).ListOwnedAsync();
+
+        Assert.Equal(OwnedQueryStatus.Ok, result.Status);
+        Assert.Equal(Enforcement.Inactive, result.Enforcement);
+        Assert.Empty(result.Rules); // inactive ufw lists nothing — but enforcement, not the empty set, is the signal
+    }
+
+    [Fact]
+    public async Task ListOwned_ActiveStatus_ReportsEnforcing()
+    {
+        var store = new InMemoryUfwProfileStore();
+        store.Files["kgsm-factorio"] = UfwProfile.Render("factorio", [new(34197, 34197, PortProtocol.Udp)]);
+
+        OwnedRulesResult result = await Driver(
+            StatusRunner("Status: active\n\nTo  Action  From\nkgsm-factorio  ALLOW  Anywhere"), store)
+            .ListOwnedAsync();
+
+        Assert.Equal(Enforcement.Enforcing, result.Enforcement);
+        Assert.Single(result.Rules);
+    }
+
+    [Fact]
+    public async Task ListOwned_StatusUnreadable_EnforcementUnknown()
+    {
+        var runner = new FakeProcessRunner { Handler = (_, _) => new ProcessResult(1, "", "permission denied") };
+        OwnedRulesResult result = await Driver(runner, new InMemoryUfwProfileStore()).ListOwnedAsync();
+        Assert.Equal(OwnedQueryStatus.Unknown, result.Status);
+        Assert.Equal(Enforcement.Unknown, result.Enforcement); // can't read → unknown, never guessed
+    }
+
+    [Theory]
+    [InlineData("Status: active\n\nTo Action From\n", (int)Enforcement.Enforcing)]
+    [InlineData("Status: inactive\n", (int)Enforcement.Inactive)]
+    [InlineData("garbage with no status line", (int)Enforcement.Unknown)]
+    public void EnforcementFromStatus_ParsesTheStatusLine(string stdout, int expected)
+        => Assert.Equal((Enforcement)expected, UfwDriver.EnforcementFromStatus(stdout));
 }
