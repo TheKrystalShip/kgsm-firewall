@@ -68,7 +68,32 @@ none`.
       the caller's job, never the transport client). Tests: new `test_firewall_logic.sh` (stub-binary
       exit-code mapping + token conversion), rewritten `test_files_ufw_logic.sh` (cutover via injected stub),
       `test_events_logic.sh` (35 events), and an `instance_ports_opened` structured-payload integration test.
-- [ ] **Inc 4 (= Phase 4) — strip the embedded direct-ufw path** once the authority is proven.
+- [x] **Inc 4 (= Phase 4) — strip the embedded direct-ufw residue (BUILT 2026-06-16, kgsm + kgsm-lib).**
+      Inc 3's hard cutover already removed the *active* `$SUDO ufw` path (it replaced, didn't dual-path), so
+      Inc 4 is dead-artifact removal + a full de-ufw rename with **no runtime-behaviour change** — the
+      "authority proven" gate guarded a dual-path that no longer exists, so it's moot for inert residue.
+      Deleted `templates/ufw.tp` (the ufw driver's `UfwProfile.Render` owns rendering) and the unread
+      `firewall_rules_dir` config key (merge-deprecation cleans existing user configs — no schema bump, no
+      migration; migration 001 left as immutable history). **Hard rename (no back-compat alias):** kgsm
+      `files ufw` verb → `files firewall`; `commands/{,handlers/}files.ufw.sh` → `files.firewall.sh`;
+      `EC_UFW` → `EC_FIREWALL`; `EC_SUCCESS_UFW_*` → `EC_SUCCESS_FIREWALL_*`; `__logic_*_ufw_integration`
+      → `*_firewall_integration`; all now-false UFW help/TUI strings reworded (no local root/ufw, no rule
+      rendering). In lockstep, kgsm-lib `IFileService.CreateUfw`/`RemoveUfw` → `CreateFirewall`/`RemoveFirewall`
+      (command strings change too), kgsm-lib → **1.13.0** (BREAKING; no external consumers; nupkg staged).
+      **Keeps:** `__parse_ufw_*` / `PortMapping.ToUfwSpec` (stored port-format names, not firewall logic) and
+      the backend token `"ufw"` (detected backend). Verified: kgsm firewall/files/events/instances-commands/
+      parser tests green (3 pre-existing unrelated failures confirmed via stash); kgsm-lib FileService 19/19 +
+      Release 0-warn (1 pre-existing flaky EventService timing test, fails identically on clean HEAD). Two
+      pre-existing *non-ufw* TUI defects surfaced, left alone (the `files create/remove <component> --instance`
+      menu form; the dead `instances --modify` wizard).
+- [x] **Deployment + live e2e (2026-06-16).** AOT single-file binary deployed at `/opt/kgsm-firewall/kgsm-firewall`
+      (symlink `/usr/local/bin/kgsm-firewall`), socket `root:kgsm` 0660, `kgsm-firewall.socket` **enabled**
+      (boots on startup) + socket-activated `.service` idle-exiting, `/etc/kgsm-firewall/kgsm-firewall.env`
+      pins `KGSM_FIREWALL_BACKEND=ufw` (deterministic when ufw is inactive — else auto-detect picks nftables,
+      no driver). Real round-trip on a kgsm-created factorio instance (ufw enabled for the test): `files
+      firewall enable` → daemon → real `kgsm-fwe2e` ufw rule v4+v6 (`34197/tcp 34197/udp`, proto-less expanded)
+      + `instance_ports_opened` structured event; `disable` → rule removed + `instance_ports_closed`; teardown
+      zero residue. ufw restored to prior **inactive** state (enforcement is the operator's `sudo ufw enable`).
 - [x] **Follow-up — daemon idle-exit (BUILT 2026-06-15).** The daemon now exits after
       `KGSM_FIREWALL_IDLE_TIMEOUT` seconds with no connections (default 30; `0` = resident; a positive value
       below 5 is clamped to 5 to stop flapping); systemd re-activates it on the next connection, so it no

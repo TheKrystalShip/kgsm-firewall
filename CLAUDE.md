@@ -46,6 +46,33 @@ sequence. This file is the working-rules summary; that doc is the source of trut
   kgsm-lib (1.12.0) so the receive path decodes them and kgsm-api can emit via `EmitWithProvenance` at M6,
   but `FirewallService` still emits nothing (the Inc 2 transport-only decision stands; emission is the
   caller's job).
+- **Increment 4 — BUILT (kgsm + kgsm-lib, 2026-06-16):** strip the embedded direct-ufw residue, the
+  end-state cleanup. Inc 3's hard cutover had already removed the *active* `$SUDO ufw` path (no fallback
+  was kept), so Inc 4 is dead-artifact removal + a full de-ufw rename — it changes **no runtime behaviour**
+  (the "authority proven" gate that guarded a dual-path is moot for inert residue). Deleted the dead
+  `templates/ufw.tp` profile (the ufw driver's `UfwProfile.Render` owns it) and the unread
+  `firewall_rules_dir` config key (merge-deprecation handles existing user configs — no schema bump, no
+  migration). **Rename (hard cutover, no alias):** the kgsm `files ufw` verb → `files firewall`,
+  `commands/{,handlers/}files.ufw.sh` → `files.firewall.sh`, `EC_UFW` → `EC_FIREWALL`,
+  `EC_SUCCESS_UFW_*` → `EC_SUCCESS_FIREWALL_*`, `__logic_*_ufw_integration` → `*_firewall_integration`,
+  and all now-false UFW help/TUI text (kgsm no longer renders rules or needs local root/ufw). In lockstep,
+  kgsm-lib's public `IFileService.CreateUfw`/`RemoveUfw` → `CreateFirewall`/`RemoveFirewall` (the command
+  strings they issue change too), kgsm-lib → **1.13.0** (BREAKING; no external consumers of those methods).
+  **Deliberate keeps:** the `__parse_ufw_*` port-spec parsers and `PortMapping.ToUfwSpec` (these name the
+  stored port format, not firewall logic) and the backend token `"ufw"` (the detected backend). Two
+  *pre-existing, non-ufw* TUI defects were surfaced but left alone (the `files create/remove <component>
+  --instance` form the interactive menu uses, and the dead `instances --modify` wizard path).
+- **Deployed + live-validated end-to-end (2026-06-16):** the AOT single-file binary is deployed at
+  `/opt/kgsm-firewall/kgsm-firewall` (symlinked `/usr/local/bin/kgsm-firewall`), socket `root:kgsm` 0660,
+  the `kgsm-firewall.socket` unit **enabled** (boots on startup) + the socket-activated `.service`
+  idle-exiting, and `/etc/kgsm-firewall/kgsm-firewall.env` pins `KGSM_FIREWALL_BACKEND=ufw` (deterministic
+  even when ufw is inactive — auto-detect would otherwise fall to nftables, which has no driver). Real
+  round-trip proven against a kgsm-created factorio instance (ufw temporarily enabled for the test): `files
+  firewall enable` → daemon → real `kgsm-fwe2e` ufw rule (v4+v6) with `34197/tcp 34197/udp` (proto-less
+  expanded), `instance_ports_opened` emitted with the structured `Ports` payload; `files firewall disable`
+  → rule removed + `instance_ports_closed`; teardown left zero residue. ufw was then restored to its prior
+  **inactive** state — the daemon is deployed/wired, but host enforcement is the operator's `sudo ufw
+  enable` to flip.
 
 ## Invariants (do not break)
 
