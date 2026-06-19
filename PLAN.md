@@ -35,8 +35,9 @@ none`.
       FD adoption against the published binary, and a full install (units + root daemon + real ufw 0.36.2)
       open→verify→list→remove round-trip via the unprivileged client.
 - [x] **Inc 2 — kgsm-lib `IFirewallService` + `Firewall.Contracts` package (BUILT 2026-06-15).** The wire
-      contract became a standalone **`src/Firewall.Contracts`** project (net9.0 — the tighter of kgsm-lib's
-      net9.0 and the daemon's net10.0; AOT/trim-clean; **no kgsm-lib reference** — own `PortDto`, never
+      contract became a standalone **`src/Firewall.Contracts`** project (originally net9.0 as the tighter of
+      kgsm-lib's net9.0 and the daemon's net10.0; retargeted to net10.0 in the ecosystem-wide bump once
+      kgsm-lib moved to net10.0; AOT/trim-clean; **no kgsm-lib reference** — own `PortDto`, never
       `PortMapping`; packed `TheKrystalShip.KGSM.Firewall.Contracts` 1.0.0 → local-nuget): the public
       `FirewallRequest`/`FirewallResponse` + `PortDto`/`OwnedRuleDto`/`CapabilitiesDto`, the
       `FirewallOps`/`Outcomes` tokens, `LineProtocol`, and the source-gen `WireJsonContext`. The **daemon

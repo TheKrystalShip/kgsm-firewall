@@ -1,20 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
 
     <RootNamespace>TheKrystalShip.KGSM.Firewall.Contracts</RootNamespace>
     <AssemblyName>TheKrystalShip.KGSM.Firewall.Contracts</AssemblyName>
 
-    <!-- net9.0, NOT net10.0: this package is consumed by kgsm-lib (net9.0) as well as the net10.0
-         AOT daemon, and the tighter constraint wins (a net10 app references a net9 lib fine, not the
-         reverse). Reflection-free (source-generated JSON) and trim/AOT-clean so neither consumer's
-         publish warns — the daemon is Native-AOT and kgsm-lib is IsAotCompatible. NO kgsm-lib /
-         TheKrystalShip.KGSM.Lib reference: kgsm-lib consumes THIS package, not the other way round
-         (that would be a dependency cycle), and this package owns its own PortDto, never kgsm-lib's
-         PortMapping. -->
+    <!-- net10.0: both consumers are now net10 — the Native-AOT daemon (Firewall.csproj) and kgsm-lib
+         (which retargeted from net9.0 to net10.0 in the ecosystem-wide bump). Reflection-free
+         (source-generated JSON) and trim/AOT-clean so neither consumer's publish warns — the daemon is
+         Native-AOT and kgsm-lib is IsAotCompatible. NO kgsm-lib / TheKrystalShip.KGSM.Lib reference:
+         kgsm-lib consumes THIS package, not the other way round (that would be a dependency cycle), and
+         this package owns its own PortDto, never kgsm-lib's PortMapping. -->
     <IsAotCompatible>true</IsAotCompatible>
     <IsTrimmable>true</IsTrimmable>
     <InvariantGlobalization>true</InvariantGlobalization>

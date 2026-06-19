@@ -30,7 +30,7 @@ kgsm-firewall is feature-complete and deployed. The pieces, by directory:
   validation (before any driver), backend detection, and the ufw driver: application-profile store +
   render/parse, ownership tag `kgsm-<instance>`, honest `Unknown`. ufw is the only driver today; others are
   drop-in (see Conventions).
-- **Wire contract** — the standalone `src/Firewall.Contracts` project (net9.0, AOT/trim-clean, **no kgsm-lib
+- **Wire contract** — the standalone `src/Firewall.Contracts` project (net10.0, AOT/trim-clean, **no kgsm-lib
   reference**, own `PortDto`): the public request/response DTOs, op/outcome tokens, line protocol, and
   source-gen JSON. Both the daemon and kgsm-lib's client consume this one package, so the wire can't drift.
 - **Consumers.** kgsm (bash) routes its `files firewall` path through the IPC chokepoint
