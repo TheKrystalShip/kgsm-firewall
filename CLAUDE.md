@@ -83,6 +83,11 @@ printf '{"op":"backend"}\n' | socat -t5 - UNIX-CONNECT:/tmp/fw.sock   # or: KGSM
 
 ## Conventions
 
+- **Logging:** the ecosystem convention (`../logging-convention.md`) — the daemon builds a bare
+  `LoggerFactory.Create` (no host) with `AddSystemdConsole()` (journald `<N>` priority prefix) +
+  `appsettings.json`/env levels (`Logging__LogLevel__Default`); the CLI-client path stays
+  `Console.WriteLine` (user output, off the log channel). The logging stack costs ~0.8 MiB of AOT
+  image (accepted); keep the ILC pass 0-warn.
 - Namespaces `TheKrystalShip.KGSM.Firewall[.Core|.Drivers.Ufw]`; assembly `kgsm-firewall`. Types are
   `internal` (the daemon is the only consumer; the public wire surface is the separate Contracts package),
   exposed to tests via `InternalsVisibleTo`.

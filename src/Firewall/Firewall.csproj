@@ -36,11 +36,18 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Logging only; no DI/hosting pulled in (a console host + raw unix socket, no ASP.NET). The
-         abstractions package is AOT-safe and reflection-free. NO TheKrystalShip.KGSM.Lib reference:
-         kgsm-firewall must not depend on kgsm-lib (kgsm-lib consumes Firewall.Contracts, not vice
-         versa) — that would be a dependency cycle. -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <!-- Standard ecosystem logging: SystemdConsole (journald-native) formatter + appsettings.json/env
+         level config, no DI/hosting host pulled in (a console host + raw unix socket, no ASP.NET). These
+         packages are AOT-safe (the logging config binder reads the LogLevel keys directly, no reflection). NO
+         TheKrystalShip.KGSM.Lib reference: kgsm-firewall must not depend on kgsm-lib (kgsm-lib consumes
+         Firewall.Contracts, not vice versa) — that would be a dependency cycle. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TheKrystalShip.KGSM.Firewall.Core;
 
@@ -13,7 +14,7 @@ internal static class DaemonHost
 {
     public static async Task<int> RunAsync(FirewallOptions options, CancellationToken ct)
     {
-        var loggers = new StderrLoggerFactory(LogLevel.Information);
+        using ILoggerFactory loggers = BuildLoggerFactory();
         ILogger boot = loggers.CreateLogger("kgsm-firewall");
 
         // Surface typo'd KGSM_FIREWALL_* vars (they otherwise silently fall back to defaults).
@@ -51,5 +52,28 @@ internal static class DaemonHost
             await daemon.RunAsync(ct).ConfigureAwait(false);
         }
         return 0;
+    }
+
+    /// <summary>
+    /// Ecosystem-standard logging: a single journald-native <c>SystemdConsole</c> sink at <c>Information</c>
+    /// by default, with levels overridable from an optional <c>appsettings.json</c> (<c>Logging:LogLevel</c>)
+    /// and, above it, environment variables (<c>Logging__LogLevel__Default=Debug</c>). The Systemd formatter
+    /// emits <c>&lt;N&gt;</c> syslog priority prefixes so <c>journalctl -p</c> can filter by level, and omits
+    /// the timestamp/colour journald already supplies. No DI container/host — just the bare
+    /// <see cref="LoggerFactory"/>. See <c>../tks/logging-convention.md</c>.
+    /// </summary>
+    private static ILoggerFactory BuildLoggerFactory()
+    {
+        IConfiguration config = new ConfigurationBuilder()
+            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+            .AddEnvironmentVariables()
+            .Build();
+
+        return LoggerFactory.Create(builder =>
+        {
+            builder.AddConfiguration(config.GetSection("Logging"));
+            builder.SetMinimumLevel(LogLevel.Information);
+            builder.AddSystemdConsole();
+        });
     }
 }
