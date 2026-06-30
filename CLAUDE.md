@@ -96,3 +96,10 @@ printf '{"op":"backend"}\n' | socat -t5 - UNIX-CONNECT:/tmp/fw.sock   # or: KGSM
 - Tests use the fakes in `tests/Firewall.Tests/Fakes/` (`FakeProcessRunner`, `InMemoryUfwProfileStore`,
   `FakeFirewallDriver`) — no real `ufw`/filesystem access. Keep it that way; gate any real-ufw test on
   root/passwordless-sudo, as kgsm does for its firewall integration tests.
+
+## Version tracking
+
+- **Version source:** `<Version>` in `src/Firewall/Firewall.csproj` (daemon) and `src/Firewall.Contracts/Firewall.Contracts.csproj` (NuGet contracts package — versioned independently)
+- Bump the version whenever you make a user-facing change (new feature, bug fix, behaviour change). Patch for fixes, minor for new features, major for breaking changes.
+- Update `CHANGELOG.md` under `## [Unreleased]` with a brief entry for every meaningful change.
+- A git tag matching the new version should be created on release: `git tag v<version>`.
