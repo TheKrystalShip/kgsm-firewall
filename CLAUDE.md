@@ -40,10 +40,16 @@ kgsm-firewall is feature-complete and deployed. The pieces, by directory:
   (the socket client, parallel to `IWatchdogClient`), which maps `PortMapping`↔`PortDto` and never emits
   events. **Asymmetric hard-fail:** enable/install aborts if the authority is unreachable; disable/uninstall
   warns and continues so a down authority can't wedge an uninstall.
-- **Deployment.** The AOT single-file binary lives at `/opt/kgsm-firewall/kgsm-firewall` (symlinked into
-  `/usr/local/bin`); the socket is `root:kgsm` 0660; `kgsm-firewall.socket` is enabled (boots) and the
-  `.service` is socket-activated + idle-exiting. `README.md` is the operator deploy/validate/troubleshoot
-  guide and ships a health-check script in `deploy/`.
+- **Deployment.** `deploy/setup.sh` provisions the host once (install dir, units, socket enabled, a
+  scoped polkit grant); `deploy/deploy.sh` deploys after that — the ecosystem contract
+  (`../scripts/deploy-template/README.md`). The AOT single-file binary lives at
+  `/opt/kgsm-firewall/kgsm-firewall` (symlinked into `/usr/local/bin`); the socket is `root:kgsm` 0660;
+  `kgsm-firewall.socket` is enabled (boots) and the `.service` is socket-activated + idle-exiting.
+  **This is the one project whose `deploy.sh` still asks for sudo**, and deliberately: the daemon runs
+  as root, so its binary and unit files must stay root-owned — a root-executed binary an unprivileged
+  user can rewrite is a real privilege-escalation path, not a technicality. Every other kgsm-* project
+  deploys with zero privilege. `README.md` is the operator deploy/validate/troubleshoot guide and ships
+  a health-check script in `deploy/`.
 
 ## Invariants (do not break)
 
