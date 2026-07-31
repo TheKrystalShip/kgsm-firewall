@@ -40,15 +40,21 @@ kgsm-firewall is feature-complete and deployed. The pieces, by directory:
   (the socket client, parallel to `IWatchdogClient`), which maps `PortMapping`↔`PortDto` and never emits
   events. **Asymmetric hard-fail:** enable/install aborts if the authority is unreachable; disable/uninstall
   warns and continues so a down authority can't wedge an uninstall.
-- **Deployment.** `deploy/setup.sh` provisions the host once (install dir, units, socket enabled, a
-  scoped polkit grant); `deploy/deploy.sh` deploys after that — the ecosystem contract
-  (`../scripts/deploy-template/README.md`). The AOT single-file binary lives at
+- **Deployment.** `deploy/setup.sh` provisions the host once, asking for sudo (install dir, units,
+  socket enabled, a polkit rule scoped to this project's units); `deploy/deploy.sh` deploys after
+  that, and refuses **before building** with *"run `deploy/setup.sh`"* on an unprovisioned host.
+  Same two-script pattern as every `kgsm-*` repo, vendored in `deploy/` so a standalone clone
+  deploys. The AOT single-file binary lives at
   `/opt/kgsm-firewall/kgsm-firewall` (symlinked into `/usr/local/bin`); the socket is `root:kgsm` 0660;
   `kgsm-firewall.socket` is enabled (boots) and the `.service` is socket-activated + idle-exiting.
-  **This is the one project whose `deploy.sh` still asks for sudo**, and deliberately: the daemon runs
+  **This is the one project whose `deploy.sh` asks for sudo**, and deliberately: the daemon runs
   as root, so its binary and unit files must stay root-owned — a root-executed binary an unprivileged
-  user can rewrite is a real privilege-escalation path, not a technicality. Every other kgsm-* project
-  deploys with zero privilege. `README.md` is the operator deploy/validate/troubleshoot guide and ships
+  user can rewrite is a real privilege-escalation path, not a technicality. Chowning the prefix to
+  the deploying user, the trick that makes every other `kgsm-*` deploy passwordless, would create
+  exactly that here. The escalation is narrowed to **two calls** (installing the binary root-owned,
+  refreshing the `/usr/local/bin` symlink) — don't widen it, and don't "fix" it to match the others.
+  The `systemctl` verbs still go through the polkit grant, so they need no password.
+  `README.md` is the operator deploy/validate/troubleshoot guide and ships
   a health-check script in `deploy/`.
 
 ## Invariants (do not break)

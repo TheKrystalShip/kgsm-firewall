@@ -81,8 +81,28 @@ the layer underneath is left alone. **The shipped driver is ufw only.** This has
 
 ## Deploy
 
-The steps below take a freshly cloned (or downloaded) project to a running, boot-persistent deployment.
-Commands that change the system use `sudo`.
+The supported path is two scripts, the same pattern every `kgsm-*` project uses:
+
+```bash
+./deploy/setup.sh    # ONCE per host. Asks for sudo. Idempotent, re-runnable.
+./deploy/deploy.sh   # every deploy.
+```
+
+`setup.sh` does everything the numbered steps below describe — creates the install dir, installs the
+units, seeds the env file, enables the socket, and installs a polkit rule scoped to this project's
+units so the `systemctl` verbs need no password. `deploy.sh` then builds and installs the binary, and
+refuses up front with *"run `deploy/setup.sh`"* if the host was never provisioned. It still needs the
+access group from step 2, which is a decision about *your* users rather than something the script can
+guess.
+
+**`deploy.sh` here asks for a sudo password — deliberately, and it is the only `kgsm-*` project that
+does.** The daemon runs as root, so its binary and unit files stay root-owned: a root-executed binary
+an unprivileged user can rewrite is a real privilege-escalation path. Elsewhere the install prefix is
+chowned to the deploying user, which is exactly what must not happen here. The escalation is narrowed
+to two calls — installing the binary root-owned and refreshing the `/usr/local/bin` symlink.
+
+The numbered steps below are the by-hand equivalent: read them to understand what gets installed, or
+follow them if you are deploying a prebuilt binary onto a host without this checkout.
 
 ### 1. Get the binary
 
