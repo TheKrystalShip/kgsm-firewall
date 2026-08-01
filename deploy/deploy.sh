@@ -53,6 +53,10 @@ if [[ "$UNIT_CHANGED" -eq 1 ]]; then
     $SUDO systemctl daemon-reload
 fi
 
+# ── 2b. Publish the leaf config descriptor (unprivileged — the dir is yours) ───
+# Before the swap, so the surface kgsm-api reads never lags the binary that implements it.
+install_leaf_descriptor
+
 # ── 3. Install the binary (THE privileged step — root-owned, root-executed) ────
 log "installing binary → ${BIN} (needs sudo: root-owned, the daemon runs as root)"
 $SUDO install -m 0755 -o root -g root "$PUBLISH_DIR/kgsm-firewall" "$BIN"

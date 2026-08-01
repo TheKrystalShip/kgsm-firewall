@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "id": "firewall",
+  "displayName": "Firewall",
+  "unit": "kgsm-firewall.service",
+  "role": "The host firewall authority — opens and closes each server's ports, and is the only honest source for whether a port is open.",
+  "onDemand": true,
+  "applyMode": "restart",
+  "floorSources": [
+    { "kind": "systemd-unit", "path": "/etc/systemd/system/kgsm-firewall.service" },
+    { "kind": "env-file", "path": "/etc/kgsm-firewall/kgsm-firewall.env" }
+  ],
+  "groups": [
+    { "id": "general", "label": "General", "order": 1 },
+    { "id": "backend", "label": "Firewall backend", "order": 2 },
+    { "id": "runtime", "label": "Runtime", "order": 3 }
+  ],
+  "fields": [
+    {
+      "key": "logLevel",
+      "env": "Logging__LogLevel__Default",
+      "label": "Log level",
+      "description": "Minimum severity this leaf logs.",
+      "group": "general",
+      "type": "enum",
+      "values": ["Trace", "Debug", "Information", "Warning", "Error", "Critical"],
+      "default": "Information",
+      "risk": "safe"
+    },
+    {
+      "key": "socketPath",
+      "env": "KGSM_FIREWALL_SOCKET",
+      "label": "Control socket",
+      "description": "Unix socket the authority listens on. Everything that opens or closes a port reaches it here, and the socket unit binds this same path.",
+      "group": "general",
+      "type": "path",
+      "default": "/run/kgsm-firewall/firewall.sock",
+      "risk": "wiring",
+      "pairedApiKey": "KGSM_API_FIREWALL_SOCKET"
+    },
+    {
+      "key": "backend",
+      "env": "KGSM_FIREWALL_BACKEND",
+      "label": "Backend",
+      "description": "Forces which host firewall to drive. Leave it unset and the active one is detected. Naming a backend this host is not actually running, or 'none', stops ports being opened at all.",
+      "group": "backend",
+      "type": "enum",
+      "values": ["none", "ufw", "firewalld", "nftables", "iptables"],
+      "risk": "wiring"
+    },
+    {
+      "key": "ufwApplicationsDir",
+      "env": "KGSM_FIREWALL_UFW_APPLICATIONS_DIR",
+      "label": "ufw profiles directory",
+      "description": "Directory ufw reads application profiles from, where this authority writes one profile per server. Applies only while ufw is the backend, whether that was detected or forced.",
+      "group": "backend",
+      "type": "path",
+      "default": "/etc/ufw/applications.d",
+      "risk": "wiring"
+    },
+    {
+      "key": "idleTimeoutSec",
+      "env": "KGSM_FIREWALL_IDLE_TIMEOUT",
+      "label": "Idle exit",
+      "description": "How long the daemon stays running with no connections before exiting, so it does not hold root all day; the next request activates it again. Zero keeps it resident. A positive value under 5 is raised to 5, so the daemon cannot flap.",
+      "group": "runtime",
+      "type": "int",
+      "default": "30",
+      "min": 0,
+      "unit": "s",
+      "risk": "safe"
+    }
+  ]
+}

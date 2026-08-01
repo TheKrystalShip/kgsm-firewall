@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — the Control Panel can configure this authority
+- **`deploy/kgsm-firewall.leaf.json` declares every knob the daemon reads** — all four
+  `KGSM_FIREWALL_*` variables plus the standard logging level, each with its type, default, bounds
+  and risk. `deploy.sh` installs it into `/var/lib/kgsm/leaves/` **unprivileged** (that directory is
+  owned by the deploying user, so this adds nothing to the two sudo calls this project already
+  makes), and kgsm-api scans it there to render this authority's configuration page.
+- **A coverage test fails the build if the descriptor and the daemon disagree**, in both directions:
+  a knob added without a descriptor entry, or a descriptor entry naming a variable nothing reads.
+- The descriptor declares this leaf **on demand**, so an apply's post-restart check reads `inactive`
+  as the resting state of a socket-activated daemon rather than a failure. Both the socket path and
+  the backend are marked `wiring`: forcing a backend this host is not running stops ports being
+  opened at all.
+
 ### Changed — deploy split into `setup.sh` (once) + `deploy.sh` (every time)
 - **`deploy/setup.sh` provisions the host once** (asks for sudo; idempotent): creates
   `/opt/kgsm-firewall`, installs the `.socket`/`.service` units, seeds the env file, enables the
