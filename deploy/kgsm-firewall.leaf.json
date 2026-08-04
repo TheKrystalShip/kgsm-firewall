@@ -7,14 +7,35 @@
   "onDemand": true,
   "applyMode": "restart",
   "floorSources": [
-    { "kind": "appsettings", "path": "/opt/kgsm-firewall/kgsm-firewall.settings.json" },
-    { "kind": "systemd-unit", "path": "/etc/systemd/system/kgsm-firewall.service" },
-    { "kind": "env-file", "path": "/etc/kgsm-firewall/kgsm-firewall.env" }
+    {
+      "kind": "appsettings",
+      "path": "/opt/kgsm-firewall/kgsm-firewall.settings.json"
+    },
+    {
+      "kind": "systemd-unit",
+      "path": "/etc/systemd/system/kgsm-firewall.service"
+    },
+    {
+      "kind": "env-file",
+      "path": "/etc/kgsm-firewall/kgsm-firewall.env"
+    }
   ],
   "groups": [
-    { "id": "general", "label": "General", "order": 1 },
-    { "id": "backend", "label": "Firewall backend", "order": 2 },
-    { "id": "runtime", "label": "Runtime", "order": 3 }
+    {
+      "id": "general",
+      "label": "General",
+      "order": 1
+    },
+    {
+      "id": "backend",
+      "label": "Firewall backend",
+      "order": 2
+    },
+    {
+      "id": "runtime",
+      "label": "Runtime",
+      "order": 3
+    }
   ],
   "fields": [
     {
@@ -24,7 +45,14 @@
       "description": "Minimum severity this leaf logs.",
       "group": "general",
       "type": "enum",
-      "values": ["Trace", "Debug", "Information", "Warning", "Error", "Critical"],
+      "values": [
+        "Trace",
+        "Debug",
+        "Information",
+        "Warning",
+        "Error",
+        "Critical"
+      ],
       "default": "Information",
       "risk": "safe"
     },
@@ -46,7 +74,13 @@
       "description": "Forces which host firewall to drive. Leave it unset and the active one is detected. Naming a backend this host is not actually running, or 'none', stops ports being opened at all.",
       "group": "backend",
       "type": "enum",
-      "values": ["none", "ufw", "firewalld", "nftables", "iptables"],
+      "values": [
+        "none",
+        "ufw",
+        "firewalld",
+        "nftables",
+        "iptables"
+      ],
       "risk": "wiring"
     },
     {

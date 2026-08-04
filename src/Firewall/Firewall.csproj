@@ -26,7 +26,7 @@
 
     <RootNamespace>TheKrystalShip.KGSM.Firewall</RootNamespace>
     <AssemblyName>kgsm-firewall</AssemblyName>
-    <Version>1.3.1</Version>
+    <Version>1.4.0</Version>
 
     <!-- Footprint tuning for the AOT image (mirrors kgsm-watchdog): there is no hot path to speed up,
          so trade throughput for a smaller native image. -->
@@ -34,7 +34,20 @@
     <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
     <StripSymbols>true</StripSymbols>
     <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
+
+    <!-- The leaf config descriptor is generated from FirewallSettings. These name the two files the
+         generator works between; the attribute source, the documentation file the <panel> tags travel
+         in, and the build step all come with the package below. -->
+    <LeafSettingsFile>kgsm-firewall.settings.json</LeafSettingsFile>
+    <LeafDescriptorFile>$(MSBuildProjectDirectory)/../../deploy/kgsm-firewall.leaf.json</LeafDescriptorFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Build-only: the descriptor attributes arrive as source and the generator as a tool, and the
+         package declares no dependencies, so nothing here reaches the AOT publish. Not a kgsm-lib
+         dependency by any route — this package has none. -->
+    <PackageReference Include="TheKrystalShip.KGSM.LeafConfig" Version="1.0.0" PrivateAssets="all" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Standard ecosystem logging: SystemdConsole (journald-native) formatter + settings-file/env

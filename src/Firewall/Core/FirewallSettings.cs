@@ -1,3 +1,5 @@
+using TheKrystalShip.KGSM.LeafConfig;
+
 namespace TheKrystalShip.KGSM.Firewall.Core;
 
 /// <summary>
@@ -12,6 +14,7 @@ namespace TheKrystalShip.KGSM.Firewall.Core;
 /// the validated form — clamping, fallbacks and backend parsing live in
 /// <see cref="FirewallOptions.FromSettings"/>.
 /// </remarks>
+[LeafSection(Section)]
 internal sealed class FirewallSettings
 {
     /// <summary>The configuration section this type binds to.</summary>
@@ -19,6 +22,10 @@ internal sealed class FirewallSettings
 
     /// <summary>Control socket the daemon listens on and the bundled client connects to. It has to
     /// match the <c>.socket</c> unit's <c>ListenStream=</c>.</summary>
+    /// <panel>Unix socket the authority listens on. Everything that opens or closes a port reaches it
+    /// here, and the socket unit binds this same path.</panel>
+    [LeafField("socketPath", "Control socket", Group = "general", Type = LeafType.Path,
+        Risk = LeafRisk.Wiring, PairedApiKey = "Api__FirewallSocketPath")]
     public string SocketPath { get; set; } = FirewallOptions.DefaultSocketPath;
 
     /// <summary>Forces which host firewall to drive: <c>none|ufw|firewalld|nftables|iptables</c>.
@@ -30,10 +37,20 @@ internal sealed class FirewallSettings
     /// detection rather than fail binding. <see cref="FirewallOptions.ParseBackend"/> is the lenient
     /// parse both cases go through.
     /// </remarks>
+    /// <panel>Forces which host firewall to drive. Leave it unset and the active one is detected.
+    /// Naming a backend this host is not actually running, or 'none', stops ports being opened at
+    /// all.</panel>
+    [LeafField("backend", "Backend", Group = "backend", Type = LeafType.Enum,
+        Values = ["none", "ufw", "firewalld", "nftables", "iptables"],
+        Risk = LeafRisk.Wiring, NoDefault = true)]
     public string Backend { get; set; } = string.Empty;
 
     /// <summary>Directory ufw reads application profiles from, where this authority writes one profile
     /// per instance. Applies only while ufw is the backend.</summary>
+    /// <panel>Directory ufw reads application profiles from, where this authority writes one profile per
+    /// server. Applies only while ufw is the backend, whether that was detected or forced.</panel>
+    [LeafField("ufwApplicationsDir", "ufw profiles directory", Group = "backend", Type = LeafType.Path,
+        Risk = LeafRisk.Wiring)]
     public string UfwApplicationsDirectory { get; set; } = FirewallOptions.DefaultUfwApplicationsDirectory;
 
     /// <summary>Seconds the socket-activated daemon stays idle before exiting, so it does not hold
@@ -47,5 +64,9 @@ internal sealed class FirewallSettings
     /// <see cref="FirewallOptions.DefaultIdleTimeoutSeconds"/> applies. A value that is present but not a
     /// number still fails loudly, which is the point of typing it.
     /// </remarks>
+    /// <panel>How long the daemon stays running with no connections before exiting, so it does not hold
+    /// root all day; the next request activates it again. Zero keeps it resident. A positive value under
+    /// 5 is raised to 5, so the daemon cannot flap.</panel>
+    [LeafField("idleTimeoutSec", "Idle exit", Group = "runtime", Min = 0, Unit = "s")]
     public int? IdleTimeoutSeconds { get; set; }
 }
