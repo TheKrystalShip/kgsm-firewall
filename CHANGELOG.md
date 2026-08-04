@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`pairedApiKey` names the Control Panel API's renamed setting.** kgsm-api's environment
+  variables are now spelled `Api__<Property>`, and this value is what the API resolves to warn that
+  a change here has moved this leaf out of its reach. Naming the old key would have made that check
+  silently find nothing and report the change as clean.
+
 ### Changed — configuration is typed, and the settings file declares all of it
 
 **This deploy renames every environment variable the authority reads.** A host carrying the old names

@@ -37,7 +37,7 @@
       "type": "path",
       "default": "/run/kgsm-firewall/firewall.sock",
       "risk": "wiring",
-      "pairedApiKey": "KGSM_API_FIREWALL_SOCKET"
+      "pairedApiKey": "Api__FirewallSocketPath"
     },
     {
       "key": "backend",
