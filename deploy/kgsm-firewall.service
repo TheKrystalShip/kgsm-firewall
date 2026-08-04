@@ -18,13 +18,13 @@ Type=simple
 # under /etc/ufw/applications.d. Unlike kgsm-watchdog it spawns no untrusted children and does NOT drop
 # privilege after boot — the socket's filesystem perms (root:kgsm 0660, set on the .socket unit) are the
 # only access boundary. The daemon adopts systemd's socket (fd 3), serves, and idle-exits after
-# KGSM_FIREWALL_IDLE_TIMEOUT seconds with no connections (default 30) so it does not hold root 24/7 —
+# Firewall__IdleTimeoutSeconds seconds with no connections (default 30) so it does not hold root 24/7 —
 # systemd re-activates it on the next connection. Set the timeout to 0 to keep it resident.
 ExecStart=/opt/kgsm-firewall/kgsm-firewall serve
 
 # The socket path the binary advertises to its bundled client must match the .socket unit's ListenStream.
-Environment=KGSM_FIREWALL_SOCKET=/run/kgsm-firewall/firewall.sock
-# Optional extra knobs (KGSM_FIREWALL_BACKEND, KGSM_FIREWALL_UFW_APPLICATIONS_DIR). The leading '-' makes
+Environment=Firewall__SocketPath=/run/kgsm-firewall/firewall.sock
+# Optional extra knobs (Firewall__Backend, Firewall__UfwApplicationsDirectory). The leading '-' makes
 # the file optional. Run `/opt/kgsm-firewall/kgsm-firewall --help` for the authoritative knob list.
 EnvironmentFile=-/etc/kgsm-firewall/kgsm-firewall.env
 

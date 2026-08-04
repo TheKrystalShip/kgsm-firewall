@@ -62,6 +62,11 @@ log "installing binary → ${BIN} (needs sudo: root-owned, the daemon runs as ro
 $SUDO install -m 0755 -o root -g root "$PUBLISH_DIR/kgsm-firewall" "$BIN"
 $SUDO ln -sfn "$BIN" "$BIN_LINK"
 
+# The settings file goes beside the binary, root-owned for the same reason the binary is: it is read by
+# a root process, so an unprivileged user who could rewrite it could point the authority anywhere.
+# World-readable, because the bundled CLI client reads it too and runs as whoever invoked it.
+$SUDO install -m 0644 -o root -g root "$PUBLISH_DIR/kgsm-firewall.settings.json" "${PREFIX}/kgsm-firewall.settings.json"
+
 # ── 4. Re-activate the socket (via the polkit grant — no password) ─────────────
 # Stop then start so a SocketGroup change takes effect on re-listen. The daemon itself is
 # socket-activated and idle-exits; we never start the .service directly.

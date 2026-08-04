@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Configuration;
 using TheKrystalShip.KGSM.Firewall.Core;
 using TheKrystalShip.KGSM.Firewall.Host;
 
@@ -17,7 +18,18 @@ if (args.Length > 0 && args[0] is "--help" or "-h")
     return 0;
 }
 
-FirewallOptions options = FirewallOptions.FromEnvironment();
+// The settings file lives beside the binary, which is not the working directory either role starts in
+// — the daemon is socket-activated by systemd, and the client is shelled from anywhere — so it is named
+// absolutely. Environment variables are registered after it and therefore win, since configuration
+// resolves by source order.
+IConfigurationRoot configuration = new ConfigurationBuilder()
+    .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "kgsm-firewall.settings.json"),
+        optional: true, reloadOnChange: false)
+    .AddEnvironmentVariables()
+    .Build();
+
+FirewallOptions options = FirewallOptions.FromSettings(
+    configuration.GetSection(FirewallSettings.Section).Get<FirewallSettings>() ?? new FirewallSettings());
 
 // Socket activation means systemd handed us the listening socket; serve regardless of args. Otherwise
 // the first arg is the verb; a bare invocation prints usage.
@@ -35,7 +47,7 @@ if (verb is "serve")
     using var cts = new CancellationTokenSource();
     using var sigterm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, c => { c.Cancel = true; cts.Cancel(); });
     using var sigint = PosixSignalRegistration.Create(PosixSignal.SIGINT, c => { c.Cancel = true; cts.Cancel(); });
-    return await DaemonHost.RunAsync(options, cts.Token);
+    return await DaemonHost.RunAsync(options, configuration, cts.Token);
 }
 
 // CLI client: verb + its own arguments.

@@ -7,6 +7,7 @@
   "onDemand": true,
   "applyMode": "restart",
   "floorSources": [
+    { "kind": "appsettings", "path": "/opt/kgsm-firewall/kgsm-firewall.settings.json" },
     { "kind": "systemd-unit", "path": "/etc/systemd/system/kgsm-firewall.service" },
     { "kind": "env-file", "path": "/etc/kgsm-firewall/kgsm-firewall.env" }
   ],
@@ -29,7 +30,7 @@
     },
     {
       "key": "socketPath",
-      "env": "KGSM_FIREWALL_SOCKET",
+      "env": "Firewall__SocketPath",
       "label": "Control socket",
       "description": "Unix socket the authority listens on. Everything that opens or closes a port reaches it here, and the socket unit binds this same path.",
       "group": "general",
@@ -40,7 +41,7 @@
     },
     {
       "key": "backend",
-      "env": "KGSM_FIREWALL_BACKEND",
+      "env": "Firewall__Backend",
       "label": "Backend",
       "description": "Forces which host firewall to drive. Leave it unset and the active one is detected. Naming a backend this host is not actually running, or 'none', stops ports being opened at all.",
       "group": "backend",
@@ -50,7 +51,7 @@
     },
     {
       "key": "ufwApplicationsDir",
-      "env": "KGSM_FIREWALL_UFW_APPLICATIONS_DIR",
+      "env": "Firewall__UfwApplicationsDirectory",
       "label": "ufw profiles directory",
       "description": "Directory ufw reads application profiles from, where this authority writes one profile per server. Applies only while ufw is the backend, whether that was detected or forced.",
       "group": "backend",
@@ -60,7 +61,7 @@
     },
     {
       "key": "idleTimeoutSec",
-      "env": "KGSM_FIREWALL_IDLE_TIMEOUT",
+      "env": "Firewall__IdleTimeoutSeconds",
       "label": "Idle exit",
       "description": "How long the daemon stays running with no connections before exiting, so it does not hold root all day; the next request activates it again. Zero keeps it resident. A positive value under 5 is raised to 5, so the daemon cannot flap.",
       "group": "runtime",

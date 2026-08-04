@@ -90,13 +90,13 @@ none`.
 - [x] **Deployment + live e2e (2026-06-16).** AOT single-file binary deployed at `/opt/kgsm-firewall/kgsm-firewall`
       (symlink `/usr/local/bin/kgsm-firewall`), socket `root:kgsm` 0660, `kgsm-firewall.socket` **enabled**
       (boots on startup) + socket-activated `.service` idle-exiting, `/etc/kgsm-firewall/kgsm-firewall.env`
-      pins `KGSM_FIREWALL_BACKEND=ufw` (deterministic when ufw is inactive — else auto-detect picks nftables,
+      pins `Firewall__Backend=ufw` (deterministic when ufw is inactive — else auto-detect picks nftables,
       no driver). Real round-trip on a kgsm-created factorio instance (ufw enabled for the test): `files
       firewall enable` → daemon → real `kgsm-fwe2e` ufw rule v4+v6 (`34197/tcp 34197/udp`, proto-less expanded)
       + `instance_ports_opened` structured event; `disable` → rule removed + `instance_ports_closed`; teardown
       zero residue. ufw restored to prior **inactive** state (enforcement is the operator's `sudo ufw enable`).
 - [x] **Follow-up — daemon idle-exit (BUILT 2026-06-15).** The daemon now exits after
-      `KGSM_FIREWALL_IDLE_TIMEOUT` seconds with no connections (default 30; `0` = resident; a positive value
+      `Firewall__IdleTimeoutSeconds` seconds with no connections (default 30; `0` = resident; a positive value
       below 5 is clamped to 5 to stop flapping); systemd re-activates it on the next connection, so it no
       longer holds root after first use. **Gated on socket activation** — a manual/dev run has nothing to
       re-spawn it, so it stays resident (`DaemonHost` reads `IsActivated()` *before* `Acquire()` clears

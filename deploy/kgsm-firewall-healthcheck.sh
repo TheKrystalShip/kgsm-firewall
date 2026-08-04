@@ -20,12 +20,12 @@
 #
 # Overridable via the environment:
 #   KGSM_FIREWALL_BIN     path/name of the binary           (default: kgsm-firewall, else /opt/kgsm-firewall/kgsm-firewall)
-#   KGSM_FIREWALL_SOCKET  control socket path                (default: /run/kgsm-firewall/firewall.sock)
+#   Firewall__SocketPath  control socket path                (default: /run/kgsm-firewall/firewall.sock)
 
 set -u
 
 BIN="${KGSM_FIREWALL_BIN:-}"
-SOCKET="${KGSM_FIREWALL_SOCKET:-/run/kgsm-firewall/firewall.sock}"
+SOCKET="${Firewall__SocketPath:-/run/kgsm-firewall/firewall.sock}"
 SOCKET_UNIT="kgsm-firewall.socket"
 PROBE="healthcheck-probe-$$"   # matches the authority's instance rule ^[A-Za-z0-9_-]+$
 
@@ -116,7 +116,7 @@ else
     fail "backend '$backend_name' cannot apply rules ($backend_line)"
     note "most common cause: ufw is INACTIVE, so detection fell through to nftables (no driver)."
     note "fix A (enforce now):  sudo ufw enable"
-    note "fix B (pin backend):  set KGSM_FIREWALL_BACKEND=ufw in /etc/kgsm-firewall/kgsm-firewall.env, then"
+    note "fix B (pin backend):  set Firewall__Backend=ufw in /etc/kgsm-firewall/kgsm-firewall.env, then"
     note "                      sudo systemctl restart $SOCKET_UNIT"
   fi
 fi

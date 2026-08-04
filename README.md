@@ -53,7 +53,7 @@ the layer underneath is left alone. **The shipped driver is ufw only.** This has
 
 > **⚠ If ufw is installed but _inactive_, auto-detection falls through to nftables — which has no driver —
 > so the authority reports `apply=False` and the first `ensure-open` fails.**
-> Either **activate ufw** (`sudo ufw enable`) or **pin the backend** with `KGSM_FIREWALL_BACKEND=ufw`
+> Either **activate ufw** (`sudo ufw enable`) or **pin the backend** with `Firewall__Backend=ufw`
 > (see [Configuration](#configuration)). Pinning makes the authority write rules deterministically
 > regardless of ufw's runtime state; ufw persists them and enforces them once it is active.
 
@@ -68,7 +68,7 @@ the layer underneath is left alone. **The shipped driver is ufw only.** This has
 | Linux with **systemd** | socket activation + lifecycle |
 | **root** for the daemon | it drives the firewall and writes the backend's config |
 | A **firewall backend** — `ufw` today | the shipped driver. Install it (`apt install ufw`, `pacman -S ufw`, …) |
-| ufw **active**, or `KGSM_FIREWALL_BACKEND=ufw` pinned | otherwise detection finds no usable driver (see the warning above) |
+| ufw **active**, or `Firewall__Backend=ufw` pinned | otherwise detection finds no usable driver (see the warning above) |
 | A **group** shared with your KGSM user | the socket is `root:<group> 0660`; group membership *is* the access control |
 | **No .NET runtime** | the binary is Native-AOT and self-contained |
 
@@ -164,7 +164,7 @@ sudo cp deploy/kgsm-firewall.env.example /etc/kgsm-firewall/kgsm-firewall.env
 sudo $EDITOR /etc/kgsm-firewall/kgsm-firewall.env
 ```
 
-> **If ufw is not active on this host, set `KGSM_FIREWALL_BACKEND=ufw` here.** Without it, the authority
+> **If ufw is not active on this host, set `Firewall__Backend=ufw` here.** Without it, the authority
 > will refuse to apply rules (it detects nftables, which has no driver). See [Configuration](#configuration)
 > for the full list.
 
@@ -184,17 +184,21 @@ socket-activated). Continue to [Validate](#validate).
 
 ## Configuration
 
-Set these in `/etc/kgsm-firewall/kgsm-firewall.env` (or any way the service's `EnvironmentFile`/`Environment`
-can reach them). The authoritative list is always printed by `kgsm-firewall --help`.
+`kgsm-firewall.settings.json`, installed beside the binary, declares every knob with its default. A
+variable overrides ONE key of it, spelling that key's path with `__`; set them in
+`/etc/kgsm-firewall/kgsm-firewall.env` (or any way the service's `EnvironmentFile`/`Environment` can reach
+them). A variable naming a key that file does not declare binds to nothing, so there is no separate list
+of recognised names to fall out of sync with. The authoritative list is always printed by
+`kgsm-firewall --help`.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `KGSM_FIREWALL_BACKEND` | *auto-detect* | Force the backend: `none` \| `ufw` \| `firewalld` \| `nftables` \| `iptables`. **Set to `ufw` if ufw may be inactive when a request arrives.** Auto-detect precedence: `active ufw/firewalld > nft > iptables > none`. |
-| `KGSM_FIREWALL_SOCKET` | `/run/kgsm-firewall/firewall.sock` | Control socket path. **Must match `ListenStream=` in `kgsm-firewall.socket`** if you change it. |
-| `KGSM_FIREWALL_UFW_APPLICATIONS_DIR` | `/etc/ufw/applications.d` | Where the ufw driver writes its `kgsm-<instance>` application profiles. |
-| `KGSM_FIREWALL_IDLE_TIMEOUT` | `30` | Seconds the socket-activated daemon stays idle (no connections) before exiting; systemd re-activates it on the next request. `0` = stay resident. A positive value below `5` is clamped to `5` (anti-flap). Ignored when not socket-activated. |
+| `Firewall__Backend` | *auto-detect* | Force the backend: `none` \| `ufw` \| `firewalld` \| `nftables` \| `iptables`. **Set to `ufw` if ufw may be inactive when a request arrives.** Auto-detect precedence: `active ufw/firewalld > nft > iptables > none`. |
+| `Firewall__SocketPath` | `/run/kgsm-firewall/firewall.sock` | Control socket path. **Must match `ListenStream=` in `kgsm-firewall.socket`** if you change it. |
+| `Firewall__UfwApplicationsDirectory` | `/etc/ufw/applications.d` | Where the ufw driver writes its `kgsm-<instance>` application profiles. |
+| `Firewall__IdleTimeoutSeconds` | `30` | Seconds the socket-activated daemon stays idle (no connections) before exiting; systemd re-activates it on the next request. `0` = stay resident. A positive value below `5` is clamped to `5` (anti-flap). Ignored when not socket-activated. |
 
-Unrecognised `KGSM_FIREWALL_*` variables are flagged as a startup warning (likely typos), not silently
+Unrecognised `Firewall__*` variables are flagged as a startup warning (likely typos), not silently
 ignored.
 
 The socket's filesystem permissions (`root:<group> 0660`, set on the **`.socket`** unit) are the only
@@ -287,7 +291,7 @@ sudo rm -rf /opt/kgsm-firewall /usr/local/bin/kgsm-firewall /etc/kgsm-firewall
 |---|---|
 | `cannot reach the firewall authority … Permission denied` | The calling user is not in the socket's group, or hasn't re-logged in since being added. `sudo usermod -aG kgsm <user>`, then re-login (or `newgrp kgsm`). |
 | `cannot reach the firewall authority … No such file or directory` | The socket isn't bound. `systemctl status kgsm-firewall.socket`; `sudo systemctl enable --now kgsm-firewall.socket`. |
-| `backend=… apply=False` / `backend=none` | No usable driver. Usually ufw is inactive and detection fell to nftables. `sudo ufw enable`, **or** pin `KGSM_FIREWALL_BACKEND=ufw` and `sudo systemctl restart kgsm-firewall.socket`. |
+| `backend=… apply=False` / `backend=none` | No usable driver. Usually ufw is inactive and detection fell to nftables. `sudo ufw enable`, **or** pin `Firewall__Backend=ufw` and `sudo systemctl restart kgsm-firewall.socket`. |
 | `ensure-open` succeeds but `list` is empty | Expected while ufw is inactive — see the note under [Validate](#validate). `sudo ufw enable` to enforce. |
 | A rule operation fails with a ufw error | Reachable authority, ufw rejected the rule. The daemon's stderr (`journalctl -u kgsm-firewall.service`) carries ufw's message. |
 
@@ -352,10 +356,10 @@ Run it without systemd (dev): start the daemon on a temp socket in one shell, dr
 
 ```bash
 BIN=src/Firewall/bin/Release/net10.0/linux-x64/publish/kgsm-firewall
-KGSM_FIREWALL_SOCKET=/tmp/fw.sock sudo -E "$BIN" serve &
-KGSM_FIREWALL_SOCKET=/tmp/fw.sock "$BIN" backend
-KGSM_FIREWALL_SOCKET=/tmp/fw.sock "$BIN" ensure-open myinst 34197/udp 27015:27020/tcp
-KGSM_FIREWALL_SOCKET=/tmp/fw.sock "$BIN" list
+Firewall__SocketPath=/tmp/fw.sock sudo -E "$BIN" serve &
+Firewall__SocketPath=/tmp/fw.sock "$BIN" backend
+Firewall__SocketPath=/tmp/fw.sock "$BIN" ensure-open myinst 34197/udp 27015:27020/tcp
+Firewall__SocketPath=/tmp/fw.sock "$BIN" list
 ```
 
 A manual `serve` run stays resident (no socket activation means nothing would re-spawn it after an

@@ -12,12 +12,12 @@ namespace TheKrystalShip.KGSM.Firewall.Host;
 /// </summary>
 internal static class DaemonHost
 {
-    public static async Task<int> RunAsync(FirewallOptions options, CancellationToken ct)
+    public static async Task<int> RunAsync(FirewallOptions options, IConfiguration configuration, CancellationToken ct)
     {
-        using ILoggerFactory loggers = BuildLoggerFactory();
+        using ILoggerFactory loggers = BuildLoggerFactory(configuration);
         ILogger boot = loggers.CreateLogger("kgsm-firewall");
 
-        // Surface typo'd KGSM_FIREWALL_* vars (they otherwise silently fall back to defaults).
+        // Surface Firewall__* vars naming no declared key (they otherwise bind to nothing, silently).
         foreach (string v in FirewallOptions.UnknownConfigVars())
             boot.LogWarning("unrecognised config variable {Var} is set but has no effect (typo?)", v);
 
@@ -56,22 +56,21 @@ internal static class DaemonHost
 
     /// <summary>
     /// Ecosystem-standard logging: a single journald-native <c>SystemdConsole</c> sink at <c>Information</c>
-    /// by default, with levels overridable from an optional <c>appsettings.json</c> (<c>Logging:LogLevel</c>)
-    /// and, above it, environment variables (<c>Logging__LogLevel__Default=Debug</c>). The Systemd formatter
+    /// by default, with levels taken from <c>kgsm-firewall.settings.json</c> (<c>Logging:LogLevel</c>) and,
+    /// above it, environment variables (<c>Logging__LogLevel__Default=Debug</c>). The Systemd formatter
     /// emits <c>&lt;N&gt;</c> syslog priority prefixes so <c>journalctl -p</c> can filter by level, and omits
     /// the timestamp/colour journald already supplies. No DI container/host — just the bare
     /// <see cref="LoggerFactory"/>. See <c>../tks/logging-convention.md</c>.
     /// </summary>
-    private static ILoggerFactory BuildLoggerFactory()
+    /// <remarks>
+    /// The configuration is handed in rather than rebuilt here, so the levels come from the same stack,
+    /// in the same order, as every other knob — a second builder is a second chance to disagree.
+    /// </remarks>
+    private static ILoggerFactory BuildLoggerFactory(IConfiguration configuration)
     {
-        IConfiguration config = new ConfigurationBuilder()
-            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
-            .AddEnvironmentVariables()
-            .Build();
-
         return LoggerFactory.Create(builder =>
         {
-            builder.AddConfiguration(config.GetSection("Logging"));
+            builder.AddConfiguration(configuration.GetSection("Logging"));
             builder.SetMinimumLevel(LogLevel.Information);
             builder.AddSystemdConsole();
         });

@@ -26,7 +26,7 @@
 
     <RootNamespace>TheKrystalShip.KGSM.Firewall</RootNamespace>
     <AssemblyName>kgsm-firewall</AssemblyName>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
 
     <!-- Footprint tuning for the AOT image (mirrors kgsm-watchdog): there is no hot path to speed up,
          so trade throughput for a smaller native image. -->
@@ -37,7 +37,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Standard ecosystem logging: SystemdConsole (journald-native) formatter + appsettings.json/env
+    <!-- Standard ecosystem logging: SystemdConsole (journald-native) formatter + settings-file/env
          level config, no DI/hosting host pulled in (a console host + raw unix socket, no ASP.NET). These
          packages are AOT-safe (the logging config binder reads the LogLevel keys directly, no reflection). NO
          TheKrystalShip.KGSM.Lib reference: kgsm-firewall must not depend on kgsm-lib (kgsm-lib consumes
@@ -48,7 +48,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="kgsm-firewall.settings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

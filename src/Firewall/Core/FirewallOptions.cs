@@ -3,17 +3,17 @@ using System.Text;
 namespace TheKrystalShip.KGSM.Firewall.Core;
 
 /// <summary>
-/// Host/runtime knobs for the authority, read from the environment at composition time. Kept minimal and
-/// defaulting to the standard ufw + systemd-runtime locations. The full list is self-documenting via
-/// <see cref="DescribeEnvironment"/> (printed by <c>kgsm-firewall --help</c>), so an operator with only
-/// the binary can discover every knob — the same convention as kgsm-watchdog.
+/// The validated host/runtime knobs the authority runs on, produced from <see cref="FirewallSettings"/>.
+/// The full list is self-documenting via <see cref="DescribeEnvironment"/> (printed by
+/// <c>kgsm-firewall --help</c>), so an operator with only the binary can discover every knob — the same
+/// convention as kgsm-watchdog.
 /// </summary>
 internal sealed class FirewallOptions
 {
-    public const string BackendEnvVar = "KGSM_FIREWALL_BACKEND";
-    public const string UfwAppsDirEnvVar = "KGSM_FIREWALL_UFW_APPLICATIONS_DIR";
-    public const string SocketEnvVar = "KGSM_FIREWALL_SOCKET";
-    public const string IdleTimeoutEnvVar = "KGSM_FIREWALL_IDLE_TIMEOUT";
+    public const string BackendEnvVar = $"{FirewallSettings.Section}__{nameof(FirewallSettings.Backend)}";
+    public const string UfwAppsDirEnvVar = $"{FirewallSettings.Section}__{nameof(FirewallSettings.UfwApplicationsDirectory)}";
+    public const string SocketEnvVar = $"{FirewallSettings.Section}__{nameof(FirewallSettings.SocketPath)}";
+    public const string IdleTimeoutEnvVar = $"{FirewallSettings.Section}__{nameof(FirewallSettings.IdleTimeoutSeconds)}";
 
     public const string DefaultUfwApplicationsDirectory = "/etc/ufw/applications.d";
     public const string DefaultSocketPath = "/run/kgsm-firewall/firewall.sock";
@@ -26,10 +26,12 @@ internal sealed class FirewallOptions
     /// fat-fingered tiny timeout can't make the daemon flap (start/idle-exit/start). 0 stays 0 (resident).</summary>
     public const int MinIdleTimeoutSeconds = 5;
 
-    /// <summary>All recognised env vars — used to flag typo'd <c>KGSM_FIREWALL_*</c> settings.</summary>
-    private static readonly string[] KnownEnvVars = [BackendEnvVar, UfwAppsDirEnvVar, SocketEnvVar, IdleTimeoutEnvVar];
+    /// <summary>Every recognised variable, derived from the bound type rather than listed by hand — a
+    /// hand-written list is one more thing that can fall behind the settings file.</summary>
+    private static readonly string[] KnownEnvVars =
+        [.. typeof(FirewallSettings).GetProperties().Select(p => $"{FirewallSettings.Section}__{p.Name}")];
 
-    /// <summary>Forced backend (the <c>KGSM_FIREWALL_BACKEND</c> override). Null = auto-detect.</summary>
+    /// <summary>Forced backend. Null = auto-detect.</summary>
     public FirewallBackend? BackendOverride { get; init; }
 
     /// <summary>Directory ufw reads application profiles from; where the authority writes/removes our
@@ -46,24 +48,30 @@ internal sealed class FirewallOptions
     /// <see cref="Host.DaemonHost"/>; with nothing to re-spawn it, a manual run always stays resident.</summary>
     public TimeSpan IdleTimeout { get; init; } = TimeSpan.FromSeconds(DefaultIdleTimeoutSeconds);
 
-    public static FirewallOptions FromEnvironment()
+    /// <summary>
+    /// Validates what configuration supplied and produces the form the authority runs on. Blank strings
+    /// fall back to the coded default and an unrecognised backend name degrades to auto-detection, so a
+    /// hand-edited value cannot take the authority down — which matters here, because an unreachable
+    /// authority hard-fails a firewall-enabled install.
+    /// </summary>
+    public static FirewallOptions FromSettings(FirewallSettings s)
         => new()
         {
-            BackendOverride = ParseBackend(Environment.GetEnvironmentVariable(BackendEnvVar)),
-            UfwApplicationsDirectory = ReadOr(UfwAppsDirEnvVar, DefaultUfwApplicationsDirectory),
-            SocketPath = ReadOr(SocketEnvVar, DefaultSocketPath),
-            IdleTimeout = ParseIdleTimeout(Environment.GetEnvironmentVariable(IdleTimeoutEnvVar)),
+            BackendOverride = ParseBackend(s.Backend),
+            UfwApplicationsDirectory = Or(s.UfwApplicationsDirectory, DefaultUfwApplicationsDirectory),
+            SocketPath = Or(s.SocketPath, DefaultSocketPath),
+            IdleTimeout = ClampIdleTimeout(s.IdleTimeoutSeconds ?? DefaultIdleTimeoutSeconds),
         };
 
-    private static string ReadOr(string envVar, string fallback)
-        => Environment.GetEnvironmentVariable(envVar) is { Length: > 0 } v ? v : fallback;
+    private static string Or(string? value, string fallback)
+        => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
 
-    /// <summary>Parse the idle-timeout knob (whole seconds). Unset/non-numeric/negative → the default;
-    /// <c>0</c> → resident (disabled); a positive value below <see cref="MinIdleTimeoutSeconds"/> is
-    /// clamped up to that floor.</summary>
-    public static TimeSpan ParseIdleTimeout(string? raw)
+    /// <summary>Apply the idle-timeout contract (whole seconds). Negative → the default; <c>0</c> →
+    /// resident (disabled); a positive value below <see cref="MinIdleTimeoutSeconds"/> is clamped up to
+    /// that floor. Unset is resolved to the default by the caller before this sees it.</summary>
+    public static TimeSpan ClampIdleTimeout(int seconds)
     {
-        if (string.IsNullOrWhiteSpace(raw) || !int.TryParse(raw.Trim(), out int seconds) || seconds < 0)
+        if (seconds < 0)
             return TimeSpan.FromSeconds(DefaultIdleTimeoutSeconds);
         if (seconds == 0)
             return TimeSpan.Zero;
@@ -82,13 +90,14 @@ internal sealed class FirewallOptions
             _ => null,
         };
 
-    /// <summary>Set <c>KGSM_FIREWALL_*</c> vars that are not recognised (likely typos) — surfaced as a
-    /// startup warning so a misspelled knob is visible rather than silently ignored.</summary>
+    /// <summary>Set <c>Firewall__*</c> vars that name no key the settings file declares (likely typos) —
+    /// surfaced as a startup warning so a misspelled knob is visible rather than silently inert.</summary>
     public static IEnumerable<string> UnknownConfigVars()
     {
+        string prefix = $"{FirewallSettings.Section}__";
         foreach (System.Collections.DictionaryEntry e in Environment.GetEnvironmentVariables())
         {
-            if (e.Key is string key && key.StartsWith("KGSM_FIREWALL_", StringComparison.Ordinal)
+            if (e.Key is string key && key.StartsWith(prefix, StringComparison.Ordinal)
                 && Array.IndexOf(KnownEnvVars, key) < 0)
                 yield return key;
         }
@@ -105,6 +114,11 @@ internal sealed class FirewallOptions
         sb.AppendLine("  kgsm-firewall remove <instance>                  close all ports owned for an instance");
         sb.AppendLine("  kgsm-firewall list [instance]                    list owned rules (all, or one instance)");
         sb.AppendLine("  kgsm-firewall backend                            report the active backend + capabilities");
+        sb.AppendLine();
+        sb.AppendLine("Configuration:");
+        sb.AppendLine("  kgsm-firewall.settings.json, beside the binary, declares every knob with its default.");
+        sb.AppendLine("  A variable below overrides ONE key of it; a variable naming a key it does not declare");
+        sb.AppendLine("  binds to nothing, and is reported at startup as a probable typo.");
         sb.AppendLine();
         sb.AppendLine("Environment:");
         sb.AppendLine($"  {SocketEnvVar}");

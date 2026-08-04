@@ -17,7 +17,7 @@ kgsm-firewall is feature-complete and deployed. The pieces, by directory:
   for dev. ufw mutations are serialised through one gate (ufw's global lock). The **exit-code contract**
   (`ExitCodes`: unreachable / unsupported / op-failed / unknown) lets the kgsm bash caller distinguish
   "authority down → abort the install" from "backend reached but rejected the rule".
-- **Idle-exit** — the socket-activated daemon exits after `KGSM_FIREWALL_IDLE_TIMEOUT`s with no connections
+- **Idle-exit** — the socket-activated daemon exits after `Firewall__IdleTimeoutSeconds`s with no connections
   (default 30; `0` = resident; a positive value below 5 is clamped to 5) so it does not hold root 24/7;
   systemd re-activates it on the next connection. Gated on socket activation (a manual run has nothing to
   re-spawn it, so it stays resident). The accept loop holds **one outstanding accept** and races it against
@@ -89,15 +89,18 @@ dotnet publish src/Firewall/Firewall.csproj -c Release -r linux-x64   # expect 0
 
 # De-risk systemd FD adoption against the PUBLISHED AOT binary (the one path no unit test covers):
 BIN=src/Firewall/bin/Release/net10.0/linux-x64/publish/kgsm-firewall
+# NOTE: systemd-socket-activate sanitises the child's environment, so Firewall__* set around it does
+# NOT reach the daemon (use --setenv, or run `serve` directly, to exercise a knob). The real unit's
+# Environment=/EnvironmentFile= propagate normally.
 systemd-socket-activate -l /tmp/fw.sock "$BIN" serve &
-printf '{"op":"backend"}\n' | socat -t5 - UNIX-CONNECT:/tmp/fw.sock   # or: KGSM_FIREWALL_SOCKET=/tmp/fw.sock "$BIN" backend
+printf '{"op":"backend"}\n' | socat -t5 - UNIX-CONNECT:/tmp/fw.sock   # or: Firewall__SocketPath=/tmp/fw.sock "$BIN" backend
 ```
 
 ## Conventions
 
 - **Logging:** the ecosystem convention (`../logging-convention.md`) — the daemon builds a bare
   `LoggerFactory.Create` (no host) with `AddSystemdConsole()` (journald `<N>` priority prefix) +
-  `appsettings.json`/env levels (`Logging__LogLevel__Default`); the CLI-client path stays
+  `kgsm-firewall.settings.json`/env levels (`Logging__LogLevel__Default`); the CLI-client path stays
   `Console.WriteLine` (user output, off the log channel). The logging stack costs ~0.8 MiB of AOT
   image (accepted); keep the ILC pass 0-warn.
 - Namespaces `TheKrystalShip.KGSM.Firewall[.Core|.Drivers.Ufw]`; assembly `kgsm-firewall`. Types are

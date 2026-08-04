@@ -1,0 +1,40 @@
+{
+  // === KGSM Firewall — configuration ===
+  //
+  // This file declares the authority's WHOLE configurable surface, each key with its default. It is
+  // the floor; an environment variable overrides one key of it by spelling that key's path with
+  // "__" — Firewall__IdleTimeoutSeconds, Logging__LogLevel__Default. A variable naming a key that is
+  // not declared here binds to nothing, and is reported at startup as a probable typo.
+  //
+  // Every key below maps 1:1 onto a property of FirewallSettings, which the binary binds in one
+  // step. A test fails the build if the two ever disagree, in either direction.
+
+  "Firewall": {
+    // Control socket the daemon listens on and the bundled client connects to. Changing it means
+    // changing ListenStream= in kgsm-firewall.socket to match, or nothing can reach the authority.
+    "SocketPath": "/run/kgsm-firewall/firewall.sock",
+
+    // Forces which host firewall to drive: none | ufw | firewalld | nftables | iptables.
+    // Blank auto-detects (precedence: active ufw/firewalld > nft > iptables > none), which is the
+    // intended state on a normal host. Only the ufw driver exists, so if ufw is INACTIVE detection
+    // falls through to nftables, finds no driver, and a firewall-enabled install hard-fails — pin
+    // "ufw" here if you intend ufw but it may not be active when a request arrives.
+    "Backend": "",
+
+    // Directory ufw reads application profiles from, where this authority writes one profile per
+    // instance. Applies only while ufw is the backend, detected or forced.
+    "UfwApplicationsDirectory": "/etc/ufw/applications.d",
+
+    // Seconds the socket-activated daemon stays idle (no connections) before exiting, so the
+    // privileged authority does not hold root 24/7; systemd re-activates it on the next request.
+    // 0 stays resident. A positive value below 5 is raised to 5, so the daemon cannot flap.
+    // Ignored on a manual, non-socket-activated run — nothing would re-spawn it.
+    "IdleTimeoutSeconds": 30
+  },
+
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information"
+    }
+  }
+}
