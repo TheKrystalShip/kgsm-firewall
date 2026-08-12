@@ -68,6 +68,16 @@
       "pairedApiKey": "Api__FirewallSocketPath"
     },
     {
+      "key": "eventJournalDir",
+      "env": "Firewall__EventJournalDirectory",
+      "label": "Event journal",
+      "description": "Where this authority records the firewall changes it made. Every component on this host keeps its own journal and the Control Panel's history is their merge, so moving this leaves the existing record behind at the old path.",
+      "group": "general",
+      "type": "path",
+      "default": "/var/lib/kgsm-firewall/events",
+      "risk": "destructive"
+    },
+    {
       "key": "backend",
       "env": "Firewall__Backend",
       "label": "Backend",

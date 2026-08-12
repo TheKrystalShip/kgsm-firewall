@@ -2,7 +2,9 @@ using System.Net.Sockets;
 using Microsoft.Extensions.Logging.Abstractions;
 using TheKrystalShip.KGSM.Firewall.Core;
 using TheKrystalShip.KGSM.Firewall.Drivers.Ufw;
+using TheKrystalShip.KGSM.Core.Models;
 using TheKrystalShip.KGSM.Firewall.Host;
+using TheKrystalShip.KGSM.Services;
 using TheKrystalShip.KGSM.Firewall.Tests.Fakes;
 
 namespace TheKrystalShip.KGSM.Firewall.Tests;
@@ -26,11 +28,22 @@ public class DaemonClientIntegrationTests
         private readonly CancellationTokenSource _cts = new();
         private readonly Task _serve;
 
+        /// <summary>Where this harness's daemon records the edges it applied — its own, per test.</summary>
+        public string JournalDir { get; }
+
+        /// <summary>Every line the daemon has recorded, oldest first.</summary>
+        public IReadOnlyList<string> JournalLines =>
+            Directory.Exists(JournalDir)
+                ? [.. Directory.GetFiles(JournalDir, "*.ndjson").OrderBy(f => f, StringComparer.Ordinal)
+                    .SelectMany(File.ReadAllLines)]
+                : [];
+
         private Harness(IFirewallDriver driver, FirewallBackend backend, InMemoryUfwProfileStore store, FakeProcessRunner runner)
         {
             Store = store;
             Runner = runner;
             SocketPath = Path.Combine(Path.GetTempPath(), $"kgfw{Guid.NewGuid():N}.sock");
+            JournalDir = Path.Combine(Path.GetTempPath(), $"kgfw-events-{Guid.NewGuid():N}");
 
             _listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             _listener.Bind(new UnixDomainSocketEndPoint(SocketPath));
@@ -39,7 +52,12 @@ public class DaemonClientIntegrationTests
             var service = new FirewallService(driver, NullLogger<FirewallService>.Instance);
             // TimeSpan.Zero = resident: these request/response tests drive the daemon explicitly and tear it
             // down via the CTS, so idle-exit must stay out of the way. Idle-exit has its own tests below.
-            var daemon = new FirewallDaemon(_listener, service, backend, TimeSpan.Zero, NullLogger<FirewallDaemon>.Instance);
+            var journal = new FirewallJournal(
+                new EventJournalWriter(
+                    new EventJournalWriterOptions { Producer = "kgsm-firewall", Directory = JournalDir },
+                    NullLogger<EventJournalWriter>.Instance),
+                NullLogger<FirewallJournal>.Instance);
+            var daemon = new FirewallDaemon(_listener, service, journal, backend, TimeSpan.Zero, NullLogger<FirewallDaemon>.Instance);
             _serve = daemon.RunAsync(_cts.Token);
         }
 
@@ -210,6 +228,21 @@ public class DaemonClientIntegrationTests
     // activation (resident otherwise). These drive FirewallDaemon directly so the timeout is exercised in
     // isolation, without external cancellation — the daemon must end RunAsync ON ITS OWN.
 
+    /// <summary>
+    /// A journal for the idle-exit tests, which are about the accept loop and record nothing. It writes
+    /// to a temp directory rather than being a null object, so an accidental write shows up as a stray
+    /// file instead of vanishing.
+    /// </summary>
+    private static FirewallJournal NoJournal() =>
+        new(new EventJournalWriter(
+                new EventJournalWriterOptions
+                {
+                    Producer = "kgsm-firewall",
+                    Directory = Path.Combine(Path.GetTempPath(), $"kgfw-idle-events-{Guid.NewGuid():N}"),
+                },
+                NullLogger<EventJournalWriter>.Instance),
+            NullLogger<FirewallJournal>.Instance);
+
     private static (Socket listener, string path) BindTempSocket()
     {
         string path = Path.Combine(Path.GetTempPath(), $"kgfw-idle-{Guid.NewGuid():N}.sock");
@@ -227,7 +260,7 @@ public class DaemonClientIntegrationTests
         {
             var service = new FirewallService(new NullFirewallDriver(FirewallBackend.Ufw), NullLogger<FirewallService>.Instance);
             var daemon = new FirewallDaemon(
-                listener, service, FirewallBackend.Ufw, TimeSpan.FromMilliseconds(150), NullLogger<FirewallDaemon>.Instance);
+                listener, service, NoJournal(), FirewallBackend.Ufw, TimeSpan.FromMilliseconds(150), NullLogger<FirewallDaemon>.Instance);
 
             Task serve = daemon.RunAsync(CancellationToken.None);
 
@@ -252,7 +285,7 @@ public class DaemonClientIntegrationTests
         {
             var service = new FirewallService(new NullFirewallDriver(FirewallBackend.Ufw), NullLogger<FirewallService>.Instance);
             var daemon = new FirewallDaemon(
-                listener, service, FirewallBackend.Ufw, TimeSpan.Zero, NullLogger<FirewallDaemon>.Instance);
+                listener, service, NoJournal(), FirewallBackend.Ufw, TimeSpan.Zero, NullLogger<FirewallDaemon>.Instance);
 
             Task serve = daemon.RunAsync(cts.Token);
 
@@ -281,7 +314,7 @@ public class DaemonClientIntegrationTests
         {
             var service = new FirewallService(driver, NullLogger<FirewallService>.Instance);
             var daemon = new FirewallDaemon(
-                listener, service, FirewallBackend.Ufw, TimeSpan.FromMilliseconds(150), NullLogger<FirewallDaemon>.Instance);
+                listener, service, NoJournal(), FirewallBackend.Ufw, TimeSpan.FromMilliseconds(150), NullLogger<FirewallDaemon>.Instance);
             Task serve = daemon.RunAsync(CancellationToken.None);
 
             var options = new FirewallOptions { SocketPath = path };

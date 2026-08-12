@@ -27,9 +27,16 @@ internal sealed class UfwDriver(
         string name = UfwProfile.NameFor(instance);
 
         // 1) (Re)write our application profile — idempotent; same content overwrites cleanly.
+        // An assertion of a state that is already true changed nothing, and saying otherwise would put a
+        // firewall edge in the record for a request that moved nothing. This matters because BOTH the
+        // supervisor and kgsm ask on one bring-up — an idempotent authority is asked twice by design, and
+        // only the first ask is an edge.
+        string rendered = UfwProfile.Render(instance, ports);
+        bool unchanged = string.Equals(profiles.Read(name), rendered, StringComparison.Ordinal);
+
         try
         {
-            profiles.Write(name, UfwProfile.Render(instance, ports));
+            profiles.Write(name, rendered);
         }
         catch (Exception ex)
         {
@@ -59,6 +66,11 @@ internal sealed class UfwDriver(
             return FirewallResult.AppliedInactive(
                 $"staged {ports.Count} spec(s) under {name} — ufw is inactive (enforces on `ufw enable`)");
 
+        // Reported only after the rule is confirmed in place: a caller asking "is it open" gets yes
+        // either way, and only the record cares which ask actually moved the firewall.
+        if (unchanged)
+            return FirewallResult.NoOp($"{name} already allows exactly these {ports.Count} spec(s)");
+
         return FirewallResult.Applied($"opened {ports.Count} spec(s) under {name}");
     }
 
@@ -69,8 +81,14 @@ internal sealed class UfwDriver(
         // Delete the rule. ufw returns non-zero if the rule was not there — fine on a remove (idempotent).
         await runner.RunAsync("ufw", ["delete", "allow", name], ct).ConfigureAwait(false);
 
+        // Nothing to delete is not a teardown. Remove stays idempotent — the caller still gets a success
+        // — but an absent rule means this call changed nothing, and reporting it as Removed would record
+        // a firewall edge for a rule that was already gone. The stop path asks twice (the supervisor and
+        // kgsm both close), so without this one stop reads as two closes.
         bool removed = profiles.Delete(name);
-        return FirewallResult.Removed(removed ? $"removed {name}" : $"{name} was not present");
+        return removed
+            ? FirewallResult.Removed($"removed {name}")
+            : FirewallResult.NoOp($"{name} was not present");
     }
 
     public async Task<OwnedRulesResult> ListOwnedAsync(

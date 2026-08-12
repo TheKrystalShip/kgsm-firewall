@@ -17,6 +17,12 @@ kgsm-firewall is feature-complete and deployed. The pieces, by directory:
   for dev. ufw mutations are serialised through one gate (ufw's global lock). The **exit-code contract**
   (`ExitCodes`: unreachable / unsupported / op-failed / unknown) lets the kgsm bash caller distinguish
   "authority down → abort the install" from "backend reached but rejected the rule".
+- **Event journal** (`Host/FirewallJournal.cs`) — the edges this authority applied, appended to
+  `/var/lib/kgsm-firewall/events` via `TheKrystalShip.KGSM.Journal`. Idle-exit is irrelevant to it: a
+  journal is append-only and written inside the request the daemon is already awake to serve, so it needs
+  no resident writer. The directory is created at startup so a reader can discover this producer before
+  its first edge — root-owned and world-readable (0755/0644), because every reader on the host is
+  unprivileged and the record holds which ports opened, not a credential.
 - **Idle-exit** — the socket-activated daemon exits after `Firewall__IdleTimeoutSeconds`s with no connections
   (default 30; `0` = resident; a positive value below 5 is clamped to 5) so it does not hold root 24/7;
   systemd re-activates it on the next connection. Gated on socket activation (a manual run has nothing to
@@ -34,11 +40,11 @@ kgsm-firewall is feature-complete and deployed. The pieces, by directory:
   reference**, own `PortDto`): the public request/response DTOs, op/outcome tokens, line protocol, and
   source-gen JSON. Both the daemon and kgsm-lib's client consume this one package, so the wire can't drift.
 - **Consumers.** kgsm (bash) routes its `files firewall` path through the IPC chokepoint
-  `commands/handlers/firewall.sh`, which shells the bundled CLI; on a confirmed open/close the bash command
-  layer emits the `instance_ports_opened`/`instance_ports_closed` kgsm events (payload `Ports` = the
-  canonical structured `[{start,end,protocol}]`). C# consumers go through kgsm-lib's `IFirewallService`
-  (the socket client, parallel to `IWatchdogClient`), which maps `PortMapping`↔`PortDto` and never emits
-  events. **Asymmetric hard-fail:** enable/install aborts if the authority is unreachable; disable/uninstall
+  `commands/handlers/firewall.sh`, which shells the bundled CLI. C# consumers go through kgsm-lib's
+  `IFirewallService` (the socket client, parallel to `IWatchdogClient`), which maps
+  `PortMapping`↔`PortDto`. **Neither records the edge** — this authority does, in its own journal, with
+  the `Ports` payload as the canonical structured `[{start,end,protocol}]`. Both pass their actor and
+  origin so that record can say who asked. **Asymmetric hard-fail:** enable/install aborts if the authority is unreachable; disable/uninstall
   warns and continues so a down authority can't wedge an uninstall.
 - **Deployment.** `deploy/setup.sh` provisions the host once, asking for sudo (install dir, units,
   socket enabled, a polkit rule scoped to this project's units); `deploy/deploy.sh` deploys after
@@ -59,9 +65,13 @@ kgsm-firewall is feature-complete and deployed. The pieces, by directory:
 
 ## Invariants (do not break)
 
-- **No dependency on kgsm-lib.** kgsm-lib consumes the `Firewall.Contracts` package; the reverse is a
-  dependency cycle. In particular **do not reference kgsm-lib's `PortMapping`** — this repo has its own
-  `PortSpec`; map at the `IFirewallService` boundary (in kgsm-lib), not here.
+- **No dependency on kgsm-lib.** This daemon runs as **root**, and a process runner, an RCON client and
+  a set of HTTP clients are attack surface a firewall authority has no use for — so it takes the small
+  packages it needs and not the engine-interop library. In particular **do not reference kgsm-lib's
+  `PortMapping`** — this repo has its own `PortSpec`; map at the `IFirewallService` boundary (in
+  kgsm-lib), not here. The two packages it does take are `Firewall.Contracts` (its own wire shapes, which
+  kgsm-lib also consumes) and **`TheKrystalShip.KGSM.Journal`**, the journal's write half, whose whole
+  dependency is `Logging.Abstractions`.
 - **Never fabricate a status.** A backend that cannot answer "is this open" returns `Unknown`, never a
   guessed empty list / `open:false`. This authority is the only honest source for the kgsm-api `open`
   verdict (ecosystem rule: measured, or explicitly unknown — never invented).
@@ -75,9 +85,20 @@ kgsm-firewall is feature-complete and deployed. The pieces, by directory:
   should not carry the ASP.NET HTTP stack), `PublishAot`, footprint-tuned like kgsm-watchdog. Shell out via
   `Process` + `ArgumentList` only (no shell, no reflection). Every change must keep `dotnet publish -r
   linux-x64` a clean ILC pass (0 IL2026/IL3050/ILC). Use `[GeneratedRegex]`, not runtime `new Regex`.
-- **emit no kgsm events from here.** Firewall audit events are kgsm events; emission happens at the caller
-  boundary (kgsm command layer for the bash path, kgsm-lib `EmitWithProvenance` for the C# path) — never
-  from this leaf, which has no business knowing kgsm's event socket. See the plan's *Firewall audit events*.
+- **This authority records the edges it applied, in its OWN journal** (`FirewallJournal` →
+  `Firewall__EventJournalDirectory`, default `/var/lib/kgsm-firewall/events`). It is the component that
+  wrote the rule and saw the backend accept it, so it is the only one that can honestly say a port
+  opened. ⚠ **No caller may record a firewall edge** — a second author puts one change in the trail
+  twice, under two different names, and is what the guard-it-so-it-is-not-audited-twice machinery in
+  kgsm and the watchdog used to exist for. Both of those emit paths are gone; do not reintroduce one.
+- **Provenance is repeated, never vouched for.** `FirewallRequest.Actor`/`Origin` carry who asked; this
+  daemon writes them onto the record and cannot check them. A caller that names nobody produces a real
+  null, never a substituted `system`. The bundled CLI reads `KGSM_EVENT_ACTOR`/`KGSM_EVENT_ORIGIN` — the
+  same variables kgsm's own emitter reads, so the two paths cannot name different actors for one action.
+- **Only a confirmed change is recorded.** `applied` / `applied-inactive` / `removed` are edges; a no-op,
+  an unsupported backend and a refusal changed nothing and produce no line. The precise outcome rides on
+  the payload so a reader can tell an enforced rule from a staged one rather than being told they are the
+  same.
 
 ## Commands
 

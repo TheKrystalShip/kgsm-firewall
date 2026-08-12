@@ -61,8 +61,26 @@ public sealed record PortDto(int Start, int End, string Protocol);
 
 /// <summary>A request to the authority. <see cref="Op"/> is one of <see cref="FirewallOps"/>;
 /// <see cref="Instance"/> is required for ensure-open/remove and optional for list (null = all owned);
-/// <see cref="Ports"/> is only meaningful for ensure-open.</summary>
-public sealed record FirewallRequest(string Op, string? Instance = null, PortDto[]? Ports = null);
+/// <see cref="Ports"/> is only meaningful for ensure-open.
+/// <para>
+/// <see cref="Actor"/> and <see cref="Origin"/> (1.2.0) are the caller's provenance, carried so the
+/// authority can record <em>who asked</em> on the edge it performs. They are the caller's to state and
+/// the authority's to repeat — it cannot check them, and does not pretend to. Both are optional and
+/// default to null: a pre-1.2.0 client sends neither, and the recorded edge honestly says nobody was
+/// named rather than inventing an actor.
+/// </para>
+/// <para>
+/// ⚠ Passing these is <b>not</b> asking the authority to emit on the caller's behalf. The authority
+/// performs the firewall change and authors the record of it; provenance says whose authority the
+/// request carried, which is exactly what the caller alone knows.
+/// </para>
+/// </summary>
+public sealed record FirewallRequest(
+    string Op,
+    string? Instance = null,
+    PortDto[]? Ports = null,
+    string? Actor = null,
+    string? Origin = null);
 
 /// <summary>The rules the authority owns for one instance (a list/backend reply payload).</summary>
 public sealed record OwnedRuleDto(string Instance, PortDto[] Ports);

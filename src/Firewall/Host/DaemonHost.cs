@@ -1,7 +1,9 @@
 using System.Net.Sockets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using TheKrystalShip.KGSM.Core.Models;
 using TheKrystalShip.KGSM.Firewall.Core;
+using TheKrystalShip.KGSM.Services;
 
 namespace TheKrystalShip.KGSM.Firewall.Host;
 
@@ -46,9 +48,35 @@ internal static class DaemonHost
             return 1;
         }
 
+        // This authority's own event journal. The producer id is this daemon's state-directory name,
+        // which is what a reader scans for, so writer and readers agree on the location without either
+        // being told. Created up front rather than on the first edge: a reader discovers a producer by
+        // finding its journal, so an authority that has simply changed nothing yet would otherwise be
+        // indistinguishable from one that keeps no journal at all.
+        var journalWriter = new EventJournalWriter(
+            new EventJournalWriterOptions
+            {
+                Producer = "kgsm-firewall",
+                Directory = options.EventJournalDirectory,
+                ProducerVersion = typeof(DaemonHost).Assembly.GetName().Version?.ToString(),
+            },
+            loggers.CreateLogger<EventJournalWriter>());
+
+        try
+        {
+            Directory.CreateDirectory(options.EventJournalDirectory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Not fatal: the writer retries on every append and says so if it still cannot.
+            boot.LogWarning(ex, "could not create the event journal directory {Dir}", options.EventJournalDirectory);
+        }
+
+        var journal = new FirewallJournal(journalWriter, loggers.CreateLogger<FirewallJournal>());
+
         using (listener)
         {
-            var daemon = new FirewallDaemon(listener, service, backend, idleTimeout, loggers.CreateLogger<FirewallDaemon>());
+            var daemon = new FirewallDaemon(listener, service, journal, backend, idleTimeout, loggers.CreateLogger<FirewallDaemon>());
             await daemon.RunAsync(ct).ConfigureAwait(false);
         }
         return 0;

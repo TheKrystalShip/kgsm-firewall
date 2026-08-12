@@ -28,6 +28,14 @@ internal sealed class FirewallSettings
         Risk = LeafRisk.Wiring, PairedApiKey = "Api__FirewallSocketPath")]
     public string SocketPath { get; set; } = FirewallOptions.DefaultSocketPath;
 
+    /// <summary>This authority's own append-only event journal — where it records the edges it applied.</summary>
+    /// <panel>Where this authority records the firewall changes it made. Every component on this host
+    /// keeps its own journal and the Control Panel's history is their merge, so moving this leaves the
+    /// existing record behind at the old path.</panel>
+    [LeafField("eventJournalDir", "Event journal", Group = "general", Type = LeafType.Path,
+        Risk = LeafRisk.Destructive)]
+    public string EventJournalDirectory { get; set; } = FirewallOptions.DefaultEventJournalDirectory;
+
     /// <summary>Forces which host firewall to drive: <c>none|ufw|firewalld|nftables|iptables</c>.
     /// Blank auto-detects, which is the intended state on a normal host — hence a blank default
     /// rather than a named one.</summary>

@@ -93,6 +93,59 @@ public class UfwDriverTests
         Assert.True(runner.WasCalledWith("ufw", "delete", "allow", "kgsm-factorio"));
     }
 
+    // ---- an edge is a CHANGE, not a request ----------------------------------------------------
+    //
+    // Both the supervisor and kgsm ask on one bring-up or teardown — an idempotent authority is asked
+    // twice by design. These pin the difference between the ask that moved the firewall and the one that
+    // found the work already done, because the authority records the former and only the former. Getting
+    // this wrong makes one server stop read as two closes.
+
+    [Fact]
+    public async Task Remove_WhenNothingWasThere_IsANoOpNotATeardown()
+    {
+        var runner = new FakeProcessRunner();
+        var store = new InMemoryUfwProfileStore(); // no profile for this instance
+
+        FirewallResult result = await Driver(runner, store).RemoveAsync("factorio");
+
+        // Still a success — remove stays idempotent and the caller is not handed an error for asking
+        // twice. It simply did not tear anything down.
+        Assert.True(result.Ok);
+        Assert.Equal(FirewallStatus.NoOp, result.Status);
+    }
+
+    [Fact]
+    public async Task EnsureOpen_AssertingTheSamePortsTwice_IsANoOpTheSecondTime()
+    {
+        var runner = new FakeProcessRunner();
+        var store = new InMemoryUfwProfileStore();
+        UfwDriver driver = Driver(runner, store);
+
+        FirewallResult first = await driver.EnsureOpenAsync("factorio", [new PortSpec(34197, 34197, PortProtocol.Udp)]);
+        FirewallResult second = await driver.EnsureOpenAsync("factorio", [new PortSpec(34197, 34197, PortProtocol.Udp)]);
+
+        Assert.Equal(FirewallStatus.Applied, first.Status);
+        Assert.Equal(FirewallStatus.NoOp, second.Status);
+
+        // The rule is still asserted on the second call — the authority is declarative, so it does not
+        // skip the work, it only declines to call it a change. A caller asking "is it open" gets yes.
+        Assert.True(second.Ok);
+        Assert.True(store.Files.ContainsKey("kgsm-factorio"));
+    }
+
+    [Fact]
+    public async Task EnsureOpen_WithDifferentPorts_IsAChange()
+    {
+        var runner = new FakeProcessRunner();
+        var store = new InMemoryUfwProfileStore();
+        UfwDriver driver = Driver(runner, store);
+
+        await driver.EnsureOpenAsync("factorio", [new PortSpec(34197, 34197, PortProtocol.Udp)]);
+        FirewallResult changed = await driver.EnsureOpenAsync("factorio", [new PortSpec(27015, 27015, PortProtocol.Tcp)]);
+
+        Assert.Equal(FirewallStatus.Applied, changed.Status);
+    }
+
     [Fact]
     public async Task ListOwned_StatusUnreadable_ReturnsUnknown_NotEmpty()
     {

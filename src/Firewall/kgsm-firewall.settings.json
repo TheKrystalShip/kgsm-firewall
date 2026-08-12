@@ -14,6 +14,10 @@
     // changing ListenStream= in kgsm-firewall.socket to match, or nothing can reach the authority.
     "SocketPath": "/run/kgsm-firewall/firewall.sock",
 
+    // This authority's own append-only event journal — where it records the edges it applied. Every
+    // component on this host keeps its own, and the Control Panel's history is their merge.
+    "EventJournalDirectory": "/var/lib/kgsm-firewall/events",
+
     // Forces which host firewall to drive: none | ufw | firewalld | nftables | iptables.
     // Blank auto-detects (precedence: active ufw/firewalld > nft > iptables > none), which is the
     // intended state on a normal host. Only the ufw driver exists, so if ufw is INACTIVE detection

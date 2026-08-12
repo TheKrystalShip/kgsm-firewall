@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — this authority records the edges it applied
+
+`FirewallJournal` appends `instance_ports_opened` / `instance_ports_closed` to
+`/var/lib/kgsm-firewall/events` (`Firewall__EventJournalDirectory`), via the shared
+`TheKrystalShip.KGSM.Journal` package — the journal's write half only, whose whole dependency is
+`Logging.Abstractions`. Not kgsm-lib: this daemon runs as root, and a process runner, an RCON client and
+a set of HTTP clients are attack surface a firewall authority has no use for.
+
+**The component that changed the firewall is now the one that records it.** Two others used to do it on
+this one's behalf — kgsm after shelling the CLI, the watchdog after calling the socket client — so the
+line naming the author named the wrong one, and both had to be guarded so a single edge was never written
+twice. Those guards, and the `KGSM_FIREWALL_APPLIED_EDGES` drain that carried them, are gone.
+
+`FirewallRequest` gains `Actor` and `Origin` (Contracts 1.2.0, additive — a pre-1.2.0 client sends
+neither and the edge honestly records nobody). They are **repeated, never vouched for**: the caller alone
+knows whose authority a request carried, and this daemon cannot check the claim. The bundled CLI reads
+`KGSM_EVENT_ACTOR`/`KGSM_EVENT_ORIGIN` — the same variables kgsm's own emitter reads, so the two paths
+cannot name different actors for one action.
+
+**Only a confirmed change is recorded.** `applied`, `applied-inactive` and `removed` are edges; a no-op,
+an unsupported backend and a refusal changed nothing and produce no line. The precise outcome rides on
+the payload, so a reader can tell an enforced rule from one staged against an inactive backend rather
+than being told they are the same. A close carries no ports: removal is addressed by ownership tag and
+the authority does not read back what it deleted — listing them would report the caller's idea of the
+ports as the authority's measurement.
+
+⚠ The unit gains `StateDirectory=kgsm-firewall` with **`StateDirectoryMode=0755`**, not systemd's default
+0700. This service runs as root and every reader on the host is unprivileged; a directory they cannot
+enter would report this authority's history as unreadable, which is indistinguishable from a genuine read
+failure.
+
+Idle-exit needed no change: a journal is append-only and written inside the request the daemon is already
+awake to serve, so it never needed a resident writer.
+
 ### Changed — the leaf config descriptor is generated, not written
 - **`deploy/kgsm-firewall.leaf.json` is now written by `TheKrystalShip.KGSM.LeafConfig` on every build**, from
   `[LeafField]` attributes and `<panel>` doc tags on `FirewallSettings`. A knob lives in two places —

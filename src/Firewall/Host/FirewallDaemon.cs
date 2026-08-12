@@ -17,6 +17,7 @@ namespace TheKrystalShip.KGSM.Firewall.Host;
 internal sealed class FirewallDaemon(
     Socket listener,
     FirewallService service,
+    FirewallJournal journal,
     FirewallBackend backend,
     TimeSpan idleTimeout,
     ILogger<FirewallDaemon> logger)
@@ -192,6 +193,13 @@ internal sealed class FirewallDaemon(
         try
         {
             FirewallResult result = await service.EnsureOpenAsync(request.Instance, ports, ct).ConfigureAwait(false);
+
+            // Recorded here, inside the gate, because this is the only place that knows the edge was
+            // actually applied AND what was applied. The caller's provenance rides through from the
+            // request — repeated, never vouched for.
+            await journal.OpenedAsync(request.Instance, ports, result, request.Actor, request.Origin, ct)
+                .ConfigureAwait(false);
+
             return WireMapping.ToResponse(result, _backendToken);
         }
         finally { _gate.Release(); }
@@ -206,6 +214,10 @@ internal sealed class FirewallDaemon(
         try
         {
             FirewallResult result = await service.RemoveAsync(request.Instance, ct).ConfigureAwait(false);
+
+            await journal.ClosedAsync(request.Instance, result, request.Actor, request.Origin, ct)
+                .ConfigureAwait(false);
+
             return WireMapping.ToResponse(result, _backendToken);
         }
         finally { _gate.Release(); }

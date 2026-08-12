@@ -18,6 +18,13 @@ internal sealed class FirewallOptions
     public const string DefaultUfwApplicationsDirectory = "/etc/ufw/applications.d";
     public const string DefaultSocketPath = "/run/kgsm-firewall/firewall.sock";
 
+    /// <summary>
+    /// Where this authority records what it changed. Under its own state directory, which is the
+    /// convention every producer follows and the location a reader's discovery scan looks in — so the
+    /// journal is found without writer or reader being configured to agree.
+    /// </summary>
+    public const string DefaultEventJournalDirectory = "/var/lib/kgsm-firewall/events";
+
     /// <summary>How long the (socket-activated) daemon stays resident with no connections before exiting,
     /// so systemd re-activates it on demand rather than holding root 24/7. A "short time" by default.</summary>
     public const int DefaultIdleTimeoutSeconds = 30;
@@ -43,6 +50,9 @@ internal sealed class FirewallOptions
     /// the bundled client always connects here.</summary>
     public string SocketPath { get; init; } = DefaultSocketPath;
 
+    /// <summary>This authority's own event journal directory.</summary>
+    public string EventJournalDirectory { get; init; } = DefaultEventJournalDirectory;
+
     /// <summary>Idle window before the daemon exits to be re-activated on demand. <see cref="TimeSpan.Zero"/>
     /// disables idle-exit (the daemon stays resident). Only honoured under systemd socket activation — see
     /// <see cref="Host.DaemonHost"/>; with nothing to re-spawn it, a manual run always stays resident.</summary>
@@ -60,6 +70,7 @@ internal sealed class FirewallOptions
             BackendOverride = ParseBackend(s.Backend),
             UfwApplicationsDirectory = Or(s.UfwApplicationsDirectory, DefaultUfwApplicationsDirectory),
             SocketPath = Or(s.SocketPath, DefaultSocketPath),
+            EventJournalDirectory = Or(s.EventJournalDirectory, DefaultEventJournalDirectory),
             IdleTimeout = ClampIdleTimeout(s.IdleTimeoutSeconds ?? DefaultIdleTimeoutSeconds),
         };
 

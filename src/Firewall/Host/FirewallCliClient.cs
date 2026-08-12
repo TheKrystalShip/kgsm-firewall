@@ -68,7 +68,7 @@ internal static class FirewallCliClient
                     error = "usage: kgsm-firewall remove <instance>";
                     return null;
                 }
-                return new FirewallRequest(FirewallOps.Remove, a[0]);
+                return new FirewallRequest(FirewallOps.Remove, a[0], null, Actor(), Origin());
 
             case FirewallOps.EnsureOpen:
                 if (a.Length < 2)
@@ -87,12 +87,48 @@ internal static class FirewallCliClient
                     }
                     ports.Add(dto);
                 }
-                return new FirewallRequest(FirewallOps.EnsureOpen, a[0], [.. ports]);
+                return new FirewallRequest(FirewallOps.EnsureOpen, a[0], [.. ports], Actor(), Origin());
 
             default:
                 error = $"unknown command '{verb}' (expected ensure-open | remove | list | backend)";
                 return null;
         }
+    }
+
+    /// <summary>
+    /// Who asked, for the authority to record on the edge it performs.
+    /// </summary>
+    /// <remarks>
+    /// Read from the SAME environment variable kgsm's own emitter reads, deliberately: this CLI is what
+    /// kgsm shells for a firewall change, so taking provenance from a different source is how the two
+    /// paths would come to name different actors for one action. A bare invocation that sets nothing
+    /// falls back to the OS user, which is an honest "who ran this" and not a fabricated identity —
+    /// kgsm's rule, applied here rather than re-decided.
+    /// </remarks>
+    private static string? Actor()
+    {
+        string? actor = Environment.GetEnvironmentVariable("KGSM_EVENT_ACTOR");
+        if (!string.IsNullOrWhiteSpace(actor)) return actor;
+
+        // sudo first: SUDO_USER is who invoked it, USER would be root and name the wrong person.
+        actor = Environment.GetEnvironmentVariable("SUDO_USER");
+        if (!string.IsNullOrWhiteSpace(actor)) return actor;
+
+        actor = Environment.GetEnvironmentVariable("USER");
+        return string.IsNullOrWhiteSpace(actor) ? null : actor;
+    }
+
+    /// <summary>
+    /// The surface that drove it, or null.
+    /// </summary>
+    /// <remarks>
+    /// No fallback, unlike the actor: a bare CLI invocation came through no product surface, and naming
+    /// one would invent a fact. An unset origin stays null and is recorded as null.
+    /// </remarks>
+    private static string? Origin()
+    {
+        string? origin = Environment.GetEnvironmentVariable("KGSM_EVENT_ORIGIN");
+        return string.IsNullOrWhiteSpace(origin) ? null : origin;
     }
 
     /// <summary>Parse a ufw-style port token: <c>port/proto</c> or <c>start:end/proto</c>. Returns null on
