@@ -1,0 +1,43 @@
+{
+  "project": "kgsm-firewall",
+  "leafId": "firewall",
+  "role": "leaf",
+  "runtime": {
+    "kind": "native-aot",
+    "note": "A single native binary. The host needs no .NET runtime."
+  },
+  "privilege": {
+    "runsAsRoot": true,
+    "why": "it edits the host firewall, which no unprivileged process can do",
+    "note": "This is the one project whose binary and units stay root-owned and whose deploy.sh sudo's those two installs. A root-executed binary an unprivileged user can rewrite is a real escalation path, not a technicality."
+  },
+  "commands": [],
+  "anyOf": [
+    {
+      "why": "the daemon detects and drives whichever host firewall is present; at least one must exist or it has nothing to configure",
+      "detectionOrder": ["nft", "iptables", "ufw", "firewall-cmd"],
+      "options": [
+        { "name": "nft",          "package": "nftables", "probe": "nft --version" },
+        { "name": "iptables",     "package": "iptables", "probe": "iptables --version" },
+        { "name": "ufw",          "package": "ufw",      "probe": "ufw version" },
+        { "name": "firewall-cmd", "package": "firewalld", "probe": "firewall-cmd --state" }
+      ]
+    }
+  ],
+  "services": [],
+  "system": [
+    { "feature": "socket-activation", "required": true, "probe": "systemctl --version", "why": "the daemon is socket-activated — the .socket is what gets enabled, the .service is static" },
+    { "feature": "net-admin",         "required": true, "probe": "id -u",               "why": "editing firewall rules needs CAP_NET_ADMIN, which is why the daemon runs as root" }
+  ],
+  "units": {
+    "system": ["kgsm-firewall.socket", "kgsm-firewall.service"],
+    "user": [],
+    "note": "Enable the .socket, not the .service. SocketGroup=kgsm with mode 0660 is what lets the unprivileged engine reach a root daemon without any further grant — the socket's group IS the access control."
+  },
+  "paths": {
+    "prefix": "/opt/kgsm-firewall",
+    "state": ["/var/lib/kgsm-firewall"],
+    "config": ["/etc/kgsm-firewall/kgsm-firewall.env"],
+    "descriptor": "/var/lib/kgsm/leaves/firewall.json"
+  }
+}

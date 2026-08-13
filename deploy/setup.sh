@@ -72,46 +72,7 @@ fi
 # Scoped to these two units and the verbs deploy.sh uses. This is what keeps the deploy down to
 # a SINGLE privileged step (the binary) instead of one per systemctl call.
 POLKIT_RENDERED="$(mktemp)"
-{
-    cat <<EOF
-// 48-${PROJECT}-deploy.rules — headless-deploy grant for ${PROJECT}.
-//
-// Installed by ${PROJECT}/deploy/setup.sh. Lets '${DEPLOY_USER}' run the systemctl verbs that
-// deploy/deploy.sh needs, for THIS project's units only, with no password and no interactive
-// auth agent. Every other unit on the host is untouched by this rule.
-//
-// Managed by setup.sh — re-run it rather than hand-editing this file.
-polkit.addRule(function(action, subject) {
-    if (subject.user !== "${DEPLOY_USER}") {
-        return;
-    }
-
-    // daemon-reload: global by nature (the action carries no unit), re-reads unit files only.
-    if (action.id === "org.freedesktop.systemd1.reload-daemon") {
-        return polkit.Result.YES;
-    }
-
-    if (action.id !== "org.freedesktop.systemd1.manage-units") {
-        return;
-    }
-
-    var units = {
-EOF
-    for u in "${UNITS[@]}"; do printf '        "%s": true,\n' "$u"; done
-    cat <<'EOF'
-    };
-    if (units[action.lookup("unit")] !== true) {
-        return;
-    }
-
-    var verb = action.lookup("verb");
-    if (verb === "start" || verb === "stop" || verb === "restart" ||
-        verb === "reload" || verb === "try-restart" || verb === "reload-or-restart") {
-        return polkit.Result.YES;
-    }
-});
-EOF
-} > "$POLKIT_RENDERED"
+render_polkit_rule > "$POLKIT_RENDERED"
 
 if $SUDO cmp -s "$POLKIT_RENDERED" "$POLKIT_DST" 2>/dev/null; then
     : # already current
