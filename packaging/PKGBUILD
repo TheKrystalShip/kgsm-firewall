@@ -1,0 +1,77 @@
+# Maintainer: Cristian Moraru <info@thekrystalship.com>
+#
+# Build from this directory:  cd packaging && makepkg
+#
+# The one KGSM daemon that runs as root — it edits the host firewall, which nothing unprivileged
+# can. Its binary and units therefore stay root-owned, which under packaging is simply the norm:
+# pacman installs everything as root anyway, so this project stops being the exception it is under
+# the privilege-free deploy.
+#
+# Socket-activated: enable the .socket, not the .service. SocketGroup=kgsm with mode 0660 is what
+# lets the unprivileged engine reach a root daemon with no further grant — the socket's group IS
+# the access control.
+
+pkgname=kgsm-firewall
+pkgver=1.5.0
+pkgrel=1
+pkgdesc="KGSM firewall leaf — the host-firewall authority for instance ports"
+arch=('x86_64')
+url="https://github.com/TheKrystalShip/kgsm-firewall"
+license=('LicenseRef-Unspecified')  # this repo ships no LICENSE file; set a real identifier once it does
+groups=('kgsm-node')
+# No separate debug package: these are shipped to a private fleet, not a distro archive.
+options=('!debug')
+depends=('systemd' 'glibc')
+# At least one backend must exist or the daemon has nothing to configure. It detects them in this
+# order at runtime, so any one of these satisfies it — which is why none is a hard dependency.
+optdepends=(
+    'nftables: firewall backend (preferred)'
+    'iptables: firewall backend'
+    'ufw: firewall backend'
+    'firewalld: firewall backend'
+)
+backup=('etc/kgsm-firewall/kgsm-firewall.env')
+
+_stage() { printf '%s' "${KGSM_STAGE:-${startdir}/../artifacts/publish}"; }
+
+pkgver() {
+    "${startdir}/../deploy/version.sh" --pkgver
+}
+
+build() {
+    local stage; stage="$(_stage)"
+    [[ -e "${stage}/kgsm-firewall" ]] || {
+        printf '\n  no publish output at %s\n' "$stage" >&2
+        printf '  build it first:  dotnet publish src/Firewall/Firewall.csproj -c Release -r linux-x64 -o artifacts/publish\n' >&2
+        printf '  or point KGSM_STAGE at an existing one.\n\n' >&2
+        return 1
+    }
+}
+
+package() {
+    local repo="${startdir}/.." stage; stage="$(_stage)"
+    local prefix="${pkgdir}/opt/${pkgname}"
+
+    install -dm755 "$prefix"
+    cp -a "${stage}/." "${prefix}/"
+    rm -f "${prefix}"/*.pdb "${prefix}"/*.dbg
+
+    # Both units ship; only the .socket is meant to be enabled. The .service is `static` by design.
+    install -Dm644 "${repo}/deploy/kgsm-firewall.service" \
+        "${pkgdir}/usr/lib/systemd/system/kgsm-firewall.service"
+    install -Dm644 "${repo}/deploy/kgsm-firewall.socket" \
+        "${pkgdir}/usr/lib/systemd/system/kgsm-firewall.socket"
+
+    # The kgsm group the socket is owned by — this package needs the account to exist even though
+    # its own daemon runs as root.
+    install -Dm644 "${repo}/deploy/sysusers.d/kgsm-firewall.conf" \
+        "${pkgdir}/usr/lib/sysusers.d/kgsm-firewall.conf"
+
+    # Root-owned 0640, which is correct rather than restrictive: systemd reads EnvironmentFile= as
+    # root before dropping privileges, so nothing needs to read it as the service user.
+    install -Dm640 "${repo}/deploy/kgsm-firewall.env.example" \
+        "${pkgdir}/etc/${pkgname}/${pkgname}.env"
+
+    install -Dm644 "${repo}/deploy/kgsm-firewall.leaf.json" \
+        "${pkgdir}/var/lib/kgsm/leaves/firewall.json"
+}
