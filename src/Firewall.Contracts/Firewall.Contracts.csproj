@@ -22,6 +22,7 @@
     <PackageId>TheKrystalShip.KGSM.Firewall.Contracts</PackageId>
     <Version>1.2.0</Version>
     <Authors>TheKrystalShip</Authors>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <Description>Wire contracts for the kgsm-firewall host-firewall authority control socket: the
       newline-delimited-JSON request/response DTOs, the op/outcome tokens, the framing, and the
       source-generated JSON context. Consumed by kgsm-lib's IFirewallService; the daemon shares this

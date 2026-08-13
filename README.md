@@ -389,3 +389,7 @@ src/
 deploy/          # systemd units (.socket + .service), .env.example, and the health-check script
 tests/Firewall.Tests/
 ```
+
+## License
+
+GNU General Public License v3.0 or later. See [LICENSE](LICENSE).
