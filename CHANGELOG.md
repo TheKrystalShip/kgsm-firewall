@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-08-16
+
+### Changed — journal identity comes from the producer id
+
+`FirewallJournal` derives from `JournalRecorder` (`TheKrystalShip.KGSM.Journal` 1.3.0), so this
+authority keeps what is its own — the two edge event types, the structured `Ports` payload, and the
+rule that only a confirmed change is recorded — and stops carrying its own copy of the write path.
+
+- **`ProducerVersion` is the informational version.** These edges carried `1.5.0.0`, a four-part form
+  no release of this authority is ever numbered with. They now carry `1.6.0+<sha>`. ⚠ Lines already on
+  disk keep the old spelling; the field is free text, so a reader comparing across the change sees both.
+- **`DefaultActor` and `DefaultOrigin` are explicitly null**, which is this authority's whole provenance
+  model made structural rather than incidental. Every other producer defaults to attributing an action
+  to itself; here that would answer "who wanted this port open?" with the name of the process that
+  typed the rule. A caller that names nobody still produces a real null.
+- **`DefaultEventJournalDirectory` is composed by the writer's own layout rule** rather than spelled as
+  a literal, so it cannot drift from where a reader's discovery scan looks. Same path, one definition.
+- Creating the journal directory at startup moved into the writer's construction, so the daemon no
+  longer does it by hand — and a directory a reader would attribute to a different producer is now
+  reported rather than accepted.
+
+The dependency surface is unchanged and still deliberate: `Journal` takes
+`DependencyInjection.Abstractions` for a registration helper this daemon does not use (it has no
+container), and no hosting stack follows it in.
+
 ## [1.5.1] - 2026-08-14
 
 ### Added — GPL-3.0-or-later

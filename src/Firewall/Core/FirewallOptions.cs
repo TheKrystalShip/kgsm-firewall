@@ -1,4 +1,5 @@
 using System.Text;
+using TheKrystalShip.KGSM.Events;
 
 namespace TheKrystalShip.KGSM.Firewall.Core;
 
@@ -19,11 +20,23 @@ internal sealed class FirewallOptions
     public const string DefaultSocketPath = "/run/kgsm-firewall/firewall.sock";
 
     /// <summary>
+    /// This authority's producer id — its state directory's own name, and the single input from which
+    /// its journal location, its stamped version and its default actor all follow.
+    /// </summary>
+    public const string JournalProducerId = "kgsm-firewall";
+
+    /// <summary>
     /// Where this authority records what it changed. Under its own state directory, which is the
     /// convention every producer follows and the location a reader's discovery scan looks in — so the
     /// journal is found without writer or reader being configured to agree.
     /// </summary>
-    public const string DefaultEventJournalDirectory = "/var/lib/kgsm-firewall/events";
+    /// <remarks>
+    /// Composed from the producer id by the writer's own layout rule, which is the same rule a reader
+    /// inverts to decide who wrote a journal it found. A literal here would be a second spelling of
+    /// that, free to drift from where readers actually look.
+    /// </remarks>
+    public static readonly string DefaultEventJournalDirectory =
+        JournalLayout.DirectoryFor(JournalProducerId);
 
     /// <summary>How long the (socket-activated) daemon stays resident with no connections before exiting,
     /// so systemd re-activates it on demand rather than holding root 24/7. A "short time" by default.</summary>

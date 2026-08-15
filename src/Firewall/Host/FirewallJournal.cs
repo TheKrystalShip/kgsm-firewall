@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using TheKrystalShip.KGSM.Core.Interfaces;
 using TheKrystalShip.KGSM.Firewall.Core;
+using TheKrystalShip.KGSM.Services;
 
 namespace TheKrystalShip.KGSM.Firewall.Host;
 
@@ -36,6 +37,7 @@ namespace TheKrystalShip.KGSM.Firewall.Host;
 /// </para>
 /// </remarks>
 internal sealed class FirewallJournal(IEventJournalWriter writer, ILogger<FirewallJournal> logger)
+    : JournalRecorder(writer, logger)
 {
     /// <summary>The host firewall now admits this instance's ports.</summary>
     public const string PortsOpenedEvent = "instance_ports_opened";
@@ -128,30 +130,36 @@ internal sealed class FirewallJournal(IEventJournalWriter writer, ILogger<Firewa
             _ => "unknown",
         });
 
-    /// <summary>The one write path, so no caller composes an envelope or swallows a failure its own way.</summary>
+    /// <summary>
+    /// This authority attributes nothing to itself.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ The one place this producer differs from an autonomous one, and it is the whole of its
+    /// provenance model: an edge exists because a caller asked for it, and only that caller knows whose
+    /// authority it carried. A default of <c>system:firewall</c> would answer "who wanted this port
+    /// open?" with the name of the process that typed the rule — which is never the interesting
+    /// answer and is not a true one. A caller that names nobody produces a real null.
+    /// </remarks>
+    protected override string? DefaultActor => null;
+
+    /// <inheritdoc cref="DefaultActor"/>
+    protected override string? DefaultOrigin => null;
+
+    /// <summary>Appends one edge, saying what was lost if it cannot.</summary>
+    /// <remarks>
+    /// The base logs the generic failure; this adds what the base cannot know — that a firewall change
+    /// happened and will not be findable afterwards. The rule is already in place either way: failing
+    /// the operation now because writing it down did not work would trade a missing line for a refused
+    /// bring-up.
+    /// </remarks>
     private async Task WriteAsync(
         string type, string? actor, string? origin, Action<Utf8JsonWriter> payload, CancellationToken ct)
     {
-        try
+        if (!await RecordAsync(type, payload, actor, origin, ct).ConfigureAwait(false))
         {
-            bool written = await writer.AppendAsync(type, payload, Blank(actor), Blank(origin), ct)
-                .ConfigureAwait(false);
-
-            if (!written)
-            {
-                // The writer logged why. This says what was lost, which it cannot know: a firewall change
-                // that happened and will not be findable afterwards.
-                logger.LogWarning(
-                    "{Event} was NOT recorded — the firewall changed, the record of it did not", type);
-            }
-        }
-        catch (Exception ex)
-        {
-            // The rule is already in place. Failing the operation now because writing it down did not
-            // work would trade a missing line for a refused bring-up.
-            logger.LogWarning(ex, "{Event} could not be recorded (non-fatal)", type);
+            logger.LogWarning(
+                "{Event} was NOT recorded — the firewall changed, the record of it did not",
+                NormalizeType(type));
         }
     }
-
-    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 }
