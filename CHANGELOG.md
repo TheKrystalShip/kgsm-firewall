@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-08-16
+
+### Added — this leaf says when the host cannot hear or speak
+
+`leaf_degraded` and `leaf_recovered` on this leaf's own journal — its first — through
+`TheKrystalShip.KGSM.Lifecycle`. The Journal package is the whole new dependency: two Abstractions
+packages, no container and no host, which is what lets a bare console app take it. The writer is
+constructed by hand, exactly as the firewall's is.
+
+⚠ **Nothing else on this host could find out.** A probe cannot ask whether this leaf is well, because
+connecting to the socket is what starts it — and would load 1.6GB of models to answer. Self-reporting
+is the only route.
+
+Four components, reported once the models have had their chance to load (they load on demand, which is
+the whole point of a leaf that exits when nobody is speaking):
+
+- `hearing` / `speaking` — a model that did not load means the host cannot do that thing at all.
+- `hearing-accelerator` / `speaking-accelerator` — ⚠ a model that loaded **on the processor**. Whisper
+  takes the first runtime that initialises, so a driver mid-upgrade silently yields the CPU: forty
+  times slower to recognise, eight times slower to synthesise. Loading and running are two answers, so
+  they are two components — the host can do the thing, slowly, and every surface waiting on it feels
+  that while none of them can see it.
+
+⚠ **Degradation only — no `leaf_ready` and no `leaf_stopping`.** Inactive is this leaf's resting state
+rather than a transition; the whole design is a process that ends to give its memory back.
+
+⚠ **The lifecycle is seeded from this leaf's own journal** (`LeafState`, Journal 1.8.0), and the defect
+that fix exists for was measured here: a missing model was reported, the daemon idled out, it woke with
+the model restored, and **no recovery was written** — the fresh process had never seen the fault.
+
 ## [1.8.0] - 2026-08-16
 
 ### Added — this authority says when it cannot apply a rule
