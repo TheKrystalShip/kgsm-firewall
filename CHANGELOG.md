@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-08-16
+
+### Added — this authority says when it cannot apply a rule
+
+`leaf_degraded` on component `backend`, through `TheKrystalShip.KGSM.Lifecycle`, when the daemon is
+answering and `CanApply` is false.
+
+⚠ **The most dangerous silent state on a KGSM host.** Ports are opened when a server starts and closed
+when it stops, so an authority that answers but cannot write leaves them closed on a start — nobody can
+connect — or open on a stop, with every caller told the request was accepted, because it was. The fact
+was already computed and logged at startup; nothing outside the process could act on it.
+
+⚠ **Degradation only — no `leaf_ready` and no `leaf_stopping`.** This daemon is socket activated with a
+30s idle window and woke 35 times in a measured day; a start and a stop on each would be five times its
+whole journal's daily output, to report that a socket-activated daemon did the one thing socket
+activation exists to make it do. **Inactive is its resting state, not a transition** — which is also
+why nothing can health-poll it: connecting to the socket is what starts it.
+
+⚠ **The lifecycle is seeded from this authority's own journal** (`LeafState`, Journal 1.8.0). It exits
+when idle and so remembers nothing between wakes: without the seed it would re-report a standing fault
+on every one of those 35 wakes and — worse — could never clear one, because the process that sees the
+backend working again is not the process that saw it fail. A healthy wake therefore reports rather than
+skips, and the emitter writes nothing when there was no fault to clear.
+
 ## [1.7.1] - 2026-08-16
 
 ### Added — this producer reports a journal no other account can reach

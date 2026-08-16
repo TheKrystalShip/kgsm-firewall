@@ -6,6 +6,7 @@ using TheKrystalShip.KGSM.Core.Models;
 using TheKrystalShip.KGSM.Firewall.Host;
 using TheKrystalShip.KGSM.Services;
 using TheKrystalShip.KGSM.Firewall.Tests.Fakes;
+using TheKrystalShip.KGSM.Lifecycle;
 
 namespace TheKrystalShip.KGSM.Firewall.Tests;
 
@@ -57,7 +58,7 @@ public class DaemonClientIntegrationTests
                     new EventJournalWriterOptions { Producer = "kgsm-firewall", Directory = JournalDir },
                     NullLogger<EventJournalWriter>.Instance),
                 NullLogger<FirewallJournal>.Instance);
-            var daemon = new FirewallDaemon(_listener, service, journal, backend, TimeSpan.Zero, NullLogger<FirewallDaemon>.Instance);
+            var daemon = new FirewallDaemon(_listener, service, journal, NoLifecycle(), backend, TimeSpan.Zero, NullLogger<FirewallDaemon>.Instance);
             _serve = daemon.RunAsync(_cts.Token);
         }
 
@@ -233,6 +234,23 @@ public class DaemonClientIntegrationTests
     /// to a temp directory rather than being a null object, so an accidental write shows up as a stray
     /// file instead of vanishing.
     /// </summary>
+    /// <summary>
+    /// A lifecycle over a throwaway journal.
+    /// </summary>
+    /// <remarks>
+    /// This daemon reports degradation only, and these tests run a backend that can apply — so a line
+    /// written through this would itself be the finding.
+    /// </remarks>
+    private static LeafLifecycle NoLifecycle() =>
+        new(new EventJournalWriter(
+                new EventJournalWriterOptions
+                {
+                    Producer = "kgsm-firewall",
+                    Directory = Path.Combine(Path.GetTempPath(), $"kgfw-lifecycle-{Guid.NewGuid():N}"),
+                },
+                NullLogger<EventJournalWriter>.Instance),
+            NullLogger<LeafLifecycle>.Instance);
+
     private static FirewallJournal NoJournal() =>
         new(new EventJournalWriter(
                 new EventJournalWriterOptions
@@ -260,7 +278,7 @@ public class DaemonClientIntegrationTests
         {
             var service = new FirewallService(new NullFirewallDriver(FirewallBackend.Ufw), NullLogger<FirewallService>.Instance);
             var daemon = new FirewallDaemon(
-                listener, service, NoJournal(), FirewallBackend.Ufw, TimeSpan.FromMilliseconds(150), NullLogger<FirewallDaemon>.Instance);
+                listener, service, NoJournal(), NoLifecycle(), FirewallBackend.Ufw, TimeSpan.FromMilliseconds(150), NullLogger<FirewallDaemon>.Instance);
 
             Task serve = daemon.RunAsync(CancellationToken.None);
 
@@ -285,7 +303,7 @@ public class DaemonClientIntegrationTests
         {
             var service = new FirewallService(new NullFirewallDriver(FirewallBackend.Ufw), NullLogger<FirewallService>.Instance);
             var daemon = new FirewallDaemon(
-                listener, service, NoJournal(), FirewallBackend.Ufw, TimeSpan.Zero, NullLogger<FirewallDaemon>.Instance);
+                listener, service, NoJournal(), NoLifecycle(), FirewallBackend.Ufw, TimeSpan.Zero, NullLogger<FirewallDaemon>.Instance);
 
             Task serve = daemon.RunAsync(cts.Token);
 
@@ -314,7 +332,7 @@ public class DaemonClientIntegrationTests
         {
             var service = new FirewallService(driver, NullLogger<FirewallService>.Instance);
             var daemon = new FirewallDaemon(
-                listener, service, NoJournal(), FirewallBackend.Ufw, TimeSpan.FromMilliseconds(150), NullLogger<FirewallDaemon>.Instance);
+                listener, service, NoJournal(), NoLifecycle(), FirewallBackend.Ufw, TimeSpan.FromMilliseconds(150), NullLogger<FirewallDaemon>.Instance);
             Task serve = daemon.RunAsync(CancellationToken.None);
 
             var options = new FirewallOptions { SocketPath = path };

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using TheKrystalShip.KGSM.Firewall.Contracts;
 using TheKrystalShip.KGSM.Firewall.Core;
+using TheKrystalShip.KGSM.Lifecycle;
 
 namespace TheKrystalShip.KGSM.Firewall.Host;
 
@@ -18,6 +19,7 @@ internal sealed class FirewallDaemon(
     Socket listener,
     FirewallService service,
     FirewallJournal journal,
+    LeafLifecycle lifecycle,
     FirewallBackend backend,
     TimeSpan idleTimeout,
     ILogger<FirewallDaemon> logger)
@@ -32,6 +34,38 @@ internal sealed class FirewallDaemon(
     // any handler is mid-`ufw`-write: a graceful RunAsync return abandons those background tasks.
     private int _activeConnections;
 
+    /// <summary>
+    /// Says so when this authority is running and cannot apply a rule.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠ The most dangerous silent state on a KGSM host. Ports are opened when a server starts and
+    /// closed when it stops, and an authority that answers but cannot write leaves them closed on a
+    /// start or open on a stop — with every caller told the request was accepted, because it was.
+    /// </para>
+    /// <para>
+    /// Reported on every wake rather than once. This daemon exits when idle, so it holds no memory of
+    /// what it said last time; a consumer reading the same finding again is being told the condition
+    /// still holds, which is what a fresh process observing it afresh honestly means.
+    /// </para>
+    /// </remarks>
+    private void ReportBackend()
+    {
+        if (service.Capabilities.CanApply)
+        {
+            // Reported, not skipped. A wake that finds the backend working is the only thing that can
+            // clear a fault an earlier process reported, and the emitter writes nothing unless there
+            // was one — so a healthy host stays silent across all 35 of its daily wakes.
+            lifecycle.MarkRecovered(FirewallComponents.Backend);
+            return;
+        }
+
+        lifecycle.MarkDegraded(
+            FirewallComponents.Backend,
+            $"the {backend} backend cannot apply a rule; ports will not be opened when a server starts "
+            + "or closed when it stops, and every caller is told the request was accepted");
+    }
+
     public async Task RunAsync(CancellationToken ct)
     {
         if (idleTimeout > TimeSpan.Zero)
@@ -42,6 +76,8 @@ internal sealed class FirewallDaemon(
             logger.LogInformation(
                 "kgsm-firewall daemon ready (backend={Backend}, canApply={CanApply}, resident)",
                 backend, service.Capabilities.CanApply);
+
+        ReportBackend();
 
         // One outstanding accept, reused across idle re-races. We never cancel + re-issue an accept on the
         // same listener (that reuse-after-cancel behaviour is the one thing we'd rather not depend on); the
