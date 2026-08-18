@@ -26,7 +26,7 @@
 
     <RootNamespace>TheKrystalShip.KGSM.Firewall</RootNamespace>
     <AssemblyName>kgsm-firewall</AssemblyName>
-    <Version>1.8.0</Version>
+    <Version>1.9.0</Version>
 
     <!-- Footprint tuning for the AOT image (mirrors kgsm-watchdog): there is no hot path to speed up,
          so trade throughput for a smaller native image. -->
@@ -76,7 +76,7 @@
     <!-- The journal's WRITE half only, and deliberately not kgsm-lib: this daemon runs as root, and a
          process runner, an RCON client and a set of HTTP clients are attack surface a firewall authority
          has no use for. The package's whole dependency is Logging.Abstractions, which is already here. -->
-    <PackageReference Include="TheKrystalShip.KGSM.Journal" Version="1.8.0" />
+    <PackageReference Include="TheKrystalShip.KGSM.Journal" Version="1.9.0" />
   </ItemGroup>
 
   <ItemGroup>
