@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-08-23
+
+### Changed — a packaged install arms the socket, not the service
+
+`packaging/kgsm-firewall.install` applies kgsm-base's `50-kgsm.preset` to `kgsm-firewall.socket` in
+`post_install`, so a node comes up with the authority reachable. The service takes no preset line at
+all: it carries no `[Install]` section, and a static unit can be neither enabled nor disabled. The
+node's post-transaction hook arms the socket. `post_upgrade` does not preset: an administrator's
+`disable` survives every later version.
+
+`depends=('kgsm-base')`, which carries the `kgsm` account whose group owns this socket — the whole of
+how an unprivileged engine reaches a root daemon. This package no longer ships
+`/usr/lib/sysusers.d/kgsm-firewall.conf`, and `deploy/sysusers.d/` is gone.
+
 ## [1.9.1] - 2026-08-23
 
 ### Fixed — the bundled CLI is on PATH on a packaged host

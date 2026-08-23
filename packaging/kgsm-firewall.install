@@ -1,0 +1,35 @@
+# The preset policy in kgsm-base enables the SOCKET, not the service: this daemon holds root and is
+# meant to exit when nobody is asking, so an inactive kgsm-firewall.service is it working correctly.
+# The service carries no [Install] section at all — it is static — so only the socket takes a preset.
+#
+# Applying the policy is symlink manipulation on disk, so it works during the transaction and in a
+# chroot alike. Arming the socket is the node's post-transaction hook's job.
+#
+# post_install only. An administrator who disabled the socket keeps it disabled across every later
+# version — re-presetting on upgrade would quietly undo that.
+
+post_install() {
+    systemctl preset kgsm-firewall.socket >/dev/null 2>&1 || true
+
+    cat <<'MSG'
+
+  kgsm-firewall needs no configuration: /etc/kgsm-firewall/kgsm-firewall.env holds overrides only.
+
+  It needs a backend to configure, and detects one at runtime in this order: an active
+  nftables or firewalld, then nft, iptables, ufw. With none installed it reports the backend as
+  unsupported rather than pretending a port is open.
+
+  The socket is root:kgsm 0660, which is the whole access boundary — that group membership is how
+  the unprivileged engine reaches a root daemon with no further grant.
+
+MSG
+}
+
+post_upgrade() {
+    cat <<'MSG'
+
+  If pacman wrote a .pacnew beside /etc/kgsm-firewall/kgsm-firewall.env, merge it — new settings are
+  declared there and a key the file never declares binds to nothing.
+
+MSG
+}

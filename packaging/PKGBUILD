@@ -12,7 +12,7 @@
 # the access control.
 
 pkgname=kgsm-firewall
-pkgver=1.5.0
+pkgver=1.10.0
 pkgrel=1
 pkgdesc="KGSM firewall leaf — the host-firewall authority for instance ports"
 arch=('x86_64')
@@ -21,7 +21,9 @@ license=('GPL-3.0-or-later')
 groups=('kgsm-node')
 # No separate debug package: these are shipped to a private fleet, not a distro archive.
 options=('!debug')
-depends=('systemd' 'glibc')
+# kgsm-base carries the kgsm account whose group owns this socket — which is the whole of how an
+# unprivileged engine reaches a root daemon — and the preset policy deciding whether it runs here.
+depends=('kgsm-base' 'systemd' 'glibc')
 # At least one backend must exist or the daemon has nothing to configure. It detects them in this
 # order at runtime, so any one of these satisfies it — which is why none is a hard dependency.
 optdepends=(
@@ -31,6 +33,7 @@ optdepends=(
     'firewalld: firewall backend'
 )
 backup=('etc/kgsm-firewall/kgsm-firewall.env')
+install="${pkgname}.install"
 
 _stage() { printf '%s' "${KGSM_STAGE:-${startdir}/../artifacts/publish}"; }
 
@@ -66,11 +69,6 @@ package() {
         "${pkgdir}/usr/lib/systemd/system/kgsm-firewall.service"
     install -Dm644 "${repo}/deploy/kgsm-firewall.socket" \
         "${pkgdir}/usr/lib/systemd/system/kgsm-firewall.socket"
-
-    # The kgsm group the socket is owned by — this package needs the account to exist even though
-    # its own daemon runs as root.
-    install -Dm644 "${repo}/deploy/sysusers.d/kgsm-firewall.conf" \
-        "${pkgdir}/usr/lib/sysusers.d/kgsm-firewall.conf"
 
     # Root-owned 0640, which is correct rather than restrictive: systemd reads EnvironmentFile= as
     # root before dropping privileges, so nothing needs to read it as the service user.
