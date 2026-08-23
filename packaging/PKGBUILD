@@ -56,6 +56,11 @@ package() {
     cp -a "${stage}/." "${prefix}/"
     rm -f "${prefix}"/*.pdb "${prefix}"/*.dbg
 
+    # The CLI on PATH — the engine resolves it with `command -v kgsm-firewall`. /usr/bin, never
+    # /usr/local/bin: /usr/local belongs to the local administrator and no package may write there.
+    install -dm755 "${pkgdir}/usr/bin"
+    ln -s "/opt/${pkgname}/${pkgname}" "${pkgdir}/usr/bin/${pkgname}"
+
     # Both units ship; only the .socket is meant to be enabled. The .service is `static` by design.
     install -Dm644 "${repo}/deploy/kgsm-firewall.service" \
         "${pkgdir}/usr/lib/systemd/system/kgsm-firewall.service"

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-08-23
+
+### Fixed — the bundled CLI is on PATH on a packaged host
+
+`packaging/PKGBUILD` links `/usr/bin/kgsm-firewall` to `/opt/kgsm-firewall/kgsm-firewall`. The engine
+resolves this authority with `command -v kgsm-firewall`, and enable/install hard-fails when nothing
+answers — so a name on PATH is what makes the authority reachable at all. `/usr/bin`, never
+`/usr/local/bin`: `/usr/local` belongs to the local administrator and no package may write there.
+
 ## [1.9.0] - 2026-08-18
 
 ### Added — every journal line now carries its own id
