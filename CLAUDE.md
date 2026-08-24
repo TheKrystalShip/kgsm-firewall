@@ -4,8 +4,8 @@ Guidance for Claude Code working in this repo. kgsm-firewall is the KGSM ecosyst
 authority** — a lean, .NET 10 Native-AOT, socket-activated privileged helper that owns all host-firewall
 state (open/close/list) behind a firewall-agnostic driver seam.
 
-**Read `../headless-network-plan.md` first** — §7 is the authoritative design and rationale; `README.md` is
-the authoritative deploy/operate guide. This file is the working-rules summary for editing the code.
+This file is the authoritative design and rationale for kgsm-firewall, plus the working rules for
+editing the code; `README.md` is the authoritative deploy/operate guide.
 
 ## Current state
 
