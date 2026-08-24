@@ -7,9 +7,7 @@ state (open/close/list) behind a firewall-agnostic driver seam.
 This file is the authoritative design and rationale for kgsm-firewall, plus the working rules for
 editing the code; `README.md` is the authoritative deploy/operate guide.
 
-## Current state
-
-kgsm-firewall is feature-complete and deployed. The pieces, by directory:
+## The pieces, by directory
 
 - **Authority daemon + bundled CLI** (`Host/`, `Program.cs`) — one Native-AOT binary with two roles: the
   socket-activated root daemon (`serve`) and its own CLI client (`ensure-open`/`remove`/`list`/`backend`)
@@ -89,8 +87,7 @@ kgsm-firewall is feature-complete and deployed. The pieces, by directory:
   `Firewall__EventJournalDirectory`, default `/var/lib/kgsm-firewall/events`). It is the component that
   wrote the rule and saw the backend accept it, so it is the only one that can honestly say a port
   opened. ⚠ **No caller may record a firewall edge** — a second author puts one change in the trail
-  twice, under two different names, and is what the guard-it-so-it-is-not-audited-twice machinery in
-  kgsm and the watchdog used to exist for. Both of those emit paths are gone; do not reintroduce one.
+  twice, under two different names. Do not add one, in kgsm, the watchdog, or anywhere else.
 - **Provenance is repeated, never vouched for.** `FirewallRequest.Actor`/`Origin` carry who asked; this
   daemon writes them onto the record and cannot check them. A caller that names nobody produces a real
   null, never a substituted `system`. The bundled CLI reads `KGSM_EVENT_ACTOR`/`KGSM_EVENT_ORIGIN` — the
@@ -166,6 +163,12 @@ history; never duplicate it into docs or code.
   survive it: *"temporary shim for the rework"*, *"added to satisfy the new requirement"*,
   milestone/phase labels (*"per M2"*, *"the Phase 1 step"*). If a line's justification is the work
   that produced it rather than the system as it now stands, it goes.
+- **No volatile numbers.** Counts and versions that drift — how many projects/files/tests/
+  partials exist, a dependency's pinned version, a file's line count — never go in prose: they are
+  stale the moment anything changes, and nothing fails to remind anyone. Name the authoritative
+  source instead (the csproj, the directory, the barrel file). A number belongs in prose only when
+  it *is* the contract (a port, a timeout, a cap) or a measured fact that is itself the reason a
+  design exists.
 - **Edits are replacements, not appends.** When changing an existing feature, rewrite the affected
   doc/comment fresh as if writing it for the first time — never append a correction under the
   stale version, and never leave the stale version standing beside the new. The current revision
