@@ -42,10 +42,10 @@ internal sealed class FirewallJournal(IEventJournalWriter writer, ILogger<Firewa
     : JournalRecorder(writer, logger)
 {
     /// <summary>The host firewall now admits this instance's ports.</summary>
-    public const string PortsOpenedEvent = "instance_ports_opened";
+    public const string PortsOpenedEvent = "network.ports.opened";
 
     /// <summary>The rules this authority held for an instance are gone.</summary>
-    public const string PortsClosedEvent = "instance_ports_closed";
+    public const string PortsClosedEvent = "network.ports.closed";
 
     /// <summary>The two names, typed so the writer can take them.</summary>
     /// <remarks>

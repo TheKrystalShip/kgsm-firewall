@@ -20,7 +20,7 @@
 
     <!-- NuGet packaging (resolved by kgsm-lib from the local-nuget folder feed). -->
     <PackageId>TheKrystalShip.KGSM.Firewall.Contracts</PackageId>
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
     <Authors>TheKrystalShip</Authors>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <Description>Wire contracts for the kgsm-firewall host-firewall authority control socket: the
