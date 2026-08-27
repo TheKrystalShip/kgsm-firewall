@@ -4,6 +4,8 @@ using TheKrystalShip.KGSM.Core.Interfaces;
 using TheKrystalShip.KGSM.Firewall.Core;
 using TheKrystalShip.KGSM.Services;
 
+using TheKrystalShip.KGSM.Events;
+
 namespace TheKrystalShip.KGSM.Firewall.Host;
 
 /// <summary>
@@ -45,6 +47,14 @@ internal sealed class FirewallJournal(IEventJournalWriter writer, ILogger<Firewa
     /// <summary>The rules this authority held for an instance are gone.</summary>
     public const string PortsClosedEvent = "instance_ports_closed";
 
+    /// <summary>The two names, typed so the writer can take them.</summary>
+    /// <remarks>
+    /// Derived from the constants above rather than restated, so the name this authority writes and
+    /// the name a reader matches cannot become two different strings.
+    /// </remarks>
+    private static readonly EventName PortsOpenedName = EventName.Parse(PortsOpenedEvent);
+    private static readonly EventName PortsClosedName = EventName.Parse(PortsClosedEvent);
+
     /// <summary>
     /// Records an <c>ensure-open</c> that actually changed the host firewall.
     /// </summary>
@@ -61,12 +71,20 @@ internal sealed class FirewallJournal(IEventJournalWriter writer, ILogger<Firewa
         if (!Applied(result.Status))
             return Task.CompletedTask;
 
-        return WriteAsync(PortsOpenedEvent, actor, origin, w =>
-        {
-            w.WriteString("InstanceName", instance);
-            WritePorts(w, ports);
-            WriteOutcome(w, result.Status);
-        }, ct);
+        return WriteAsync(
+            PortsOpenedName, actor, origin,
+            w =>
+            {
+                w.WriteString("InstanceName", instance);
+                WritePorts(w, ports);
+                WriteOutcome(w, result.Status);
+            },
+            // A door opening is a fact worth recording and nothing more; the door closing is the half
+            // that leaves something unreachable, and reads louder for it.
+            EventSeverity.Info,
+            EventOutcome.Neutral,
+            $"opened firewall ports for {instance}",
+            ct);
     }
 
     /// <summary>
@@ -84,11 +102,17 @@ internal sealed class FirewallJournal(IEventJournalWriter writer, ILogger<Firewa
         if (!Applied(result.Status))
             return Task.CompletedTask;
 
-        return WriteAsync(PortsClosedEvent, actor, origin, w =>
-        {
-            w.WriteString("InstanceName", instance);
-            WriteOutcome(w, result.Status);
-        }, ct);
+        return WriteAsync(
+            PortsClosedName, actor, origin,
+            w =>
+            {
+                w.WriteString("InstanceName", instance);
+                WriteOutcome(w, result.Status);
+            },
+            EventSeverity.Warn,
+            EventOutcome.Neutral,
+            $"closed firewall ports for {instance}",
+            ct);
     }
 
     /// <summary>
@@ -153,9 +177,13 @@ internal sealed class FirewallJournal(IEventJournalWriter writer, ILogger<Firewa
     /// bring-up.
     /// </remarks>
     private async Task WriteAsync(
-        string type, string? actor, string? origin, Action<Utf8JsonWriter> payload, CancellationToken ct)
+        EventName type, string? actor, string? origin, Action<Utf8JsonWriter> payload,
+        EventSeverity severity, EventOutcome outcome, string summary, CancellationToken ct)
     {
-        if (!await RecordAsync(type, payload, actor, origin, ct).ConfigureAwait(false))
+        bool written = await RecordAsync(type, payload, actor, origin, severity, outcome, summary, ct)
+            .ConfigureAwait(false);
+
+        if (!written)
         {
             logger.LogWarning(
                 "{Event} was NOT recorded — the firewall changed, the record of it did not",
