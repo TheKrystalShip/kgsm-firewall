@@ -158,7 +158,7 @@ internal sealed class FirewallJournal(IEventJournalWriter writer, ILogger<Firewa
     /// This authority attributes nothing to itself.
     /// </summary>
     /// <remarks>
-    /// ⚠ The one place this producer differs from an autonomous one, and it is the whole of its
+    /// The one place this producer differs from an autonomous one, and it is the whole of its
     /// provenance model: an edge exists because a caller asked for it, and only that caller knows whose
     /// authority it carried. A default of <c>system:firewall</c> would answer "who wanted this port
     /// open?" with the name of the process that typed the rule — which is never the interesting

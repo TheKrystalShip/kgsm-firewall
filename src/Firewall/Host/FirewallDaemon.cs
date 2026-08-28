@@ -39,7 +39,7 @@ internal sealed class FirewallDaemon(
     /// </summary>
     /// <remarks>
     /// <para>
-    /// ⚠ The most dangerous silent state on a KGSM host. Ports are opened when a server starts and
+    /// The most dangerous silent state on a KGSM host. Ports are opened when a server starts and
     /// closed when it stops, and an authority that answers but cannot write leaves them closed on a
     /// start or open on a stop — with every caller told the request was accepted, because it was.
     /// </para>

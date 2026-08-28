@@ -51,7 +51,7 @@ active ufw/firewalld  >  raw nftables  >  raw iptables  >  none
 ufw and firewalld are themselves frontends over nft/iptables, so when one is **active** it is driven and
 the layer underneath is left alone. **The shipped driver is ufw only.** This has one important consequence:
 
-> **⚠ If ufw is installed but _inactive_, auto-detection falls through to nftables — which has no driver —
+> **If ufw is installed but _inactive_, auto-detection falls through to nftables — which has no driver —
 > so the authority reports `apply=False` and the first `ensure-open` fails.**
 > Either **activate ufw** (`sudo ufw enable`) or **pin the backend** with `Firewall__Backend=ufw`
 > (see [Configuration](#configuration)). Pinning makes the authority write rules deterministically

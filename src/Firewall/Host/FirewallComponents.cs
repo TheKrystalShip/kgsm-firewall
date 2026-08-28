@@ -5,7 +5,7 @@ namespace TheKrystalShip.KGSM.Firewall.Host;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⚠ <b>This daemon reports degradation only — never a start or a stop.</b> It is socket activated
+/// <b>This daemon reports degradation only — never a start or a stop.</b> It is socket activated
 /// with a short idle window and woke 35 times in a measured day; a start and a stop on each would be
 /// five times its whole journal's daily output, to report that a socket-activated daemon did the one
 /// thing socket activation exists to make it do. <b>Inactive is its resting state, not a
@@ -24,7 +24,7 @@ internal static class FirewallComponents
     /// The backend this authority writes rules through.
     /// </summary>
     /// <remarks>
-    /// ⚠ The most dangerous silent state on a KGSM host. Ports are opened when a server starts and
+    /// The most dangerous silent state on a KGSM host. Ports are opened when a server starts and
     /// closed when it stops, so an authority that answers but cannot write leaves them closed on a
     /// start — nobody can connect — or open on a stop, with every caller told the request was
     /// accepted, because it was.

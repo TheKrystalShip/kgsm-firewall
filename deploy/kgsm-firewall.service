@@ -25,7 +25,7 @@ ExecStart=/opt/kgsm-firewall/kgsm-firewall serve
 # This authority's own event journal lives here (/var/lib/kgsm-firewall/events). systemd creates the
 # directory before the daemon starts, which matters because the daemon may idle-exit between requests and
 # a reader discovers a producer by finding its journal.
-# ⚠ 0755, not the systemd default 0700: this service runs as root and EVERY reader on the host
+# 0755, not the systemd default 0700: this service runs as root and EVERY reader on the host
 # (kgsm-api, the bot, the assistant) is unprivileged. The record holds which ports were opened — no
 # credential — and a directory they cannot enter would report this authority's history as unreadable,
 # which is indistinguishable from a genuine read failure.

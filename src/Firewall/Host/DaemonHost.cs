@@ -69,12 +69,12 @@ internal static class DaemonHost
 
         // What this authority says about ITSELF, over the same writer.
         //
-        // ⚠ It reports degradation ONLY — no leaf_ready and no leaf_stopping. This daemon is socket
+        // It reports degradation ONLY — no leaf_ready and no leaf_stopping. This daemon is socket
         // activated with a short idle window and woke 35 times in a measured day; a start and a stop
         // on each would be five times its whole journal's daily output, to report that a
         // socket-activated daemon did the one thing socket activation exists to make it do. Inactive
         // is its resting state, not a transition.
-        // ⚠ Seeded from this authority's own journal. It exits when idle and so remembers nothing
+        // Seeded from this authority's own journal. It exits when idle and so remembers nothing
         // between wakes: without the seed it would re-report a standing fault on every one of the 35
         // wakes a measured day holds, and — worse — could never clear one, because the process that
         // sees the backend working again is not the process that saw it fail.

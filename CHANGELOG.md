@@ -41,7 +41,7 @@ rewrite **detectable** — a reference carrying both finds the line by position 
 right one by id, where before a shifted offset resolved to a real, parseable event of the wrong kind
 with nothing to notice.
 
-⚠ Optional and optional forever: lines written before this are on disk for as long as retention holds
+Optional and optional forever: lines written before this are on disk for as long as retention holds
 them, and **absent means unknown, never a mismatch**. Authority: `journal-entry-id-plan.md`.
 
 ## [1.7.0] - 2026-08-16
@@ -53,7 +53,7 @@ them, and **absent means unknown, never a mismatch**. Authority: `journal-entry-
 packages, no container and no host, which is what lets a bare console app take it. The writer is
 constructed by hand, exactly as the firewall's is.
 
-⚠ **Nothing else on this host could find out.** A probe cannot ask whether this leaf is well, because
+**Nothing else on this host could find out.** A probe cannot ask whether this leaf is well, because
 connecting to the socket is what starts it — and would load 1.6GB of models to answer. Self-reporting
 is the only route.
 
@@ -61,16 +61,16 @@ Four components, reported once the models have had their chance to load (they lo
 the whole point of a leaf that exits when nobody is speaking):
 
 - `hearing` / `speaking` — a model that did not load means the host cannot do that thing at all.
-- `hearing-accelerator` / `speaking-accelerator` — ⚠ a model that loaded **on the processor**. Whisper
+- `hearing-accelerator` / `speaking-accelerator` — a model that loaded **on the processor**. Whisper
   takes the first runtime that initialises, so a driver mid-upgrade silently yields the CPU: forty
   times slower to recognise, eight times slower to synthesise. Loading and running are two answers, so
   they are two components — the host can do the thing, slowly, and every surface waiting on it feels
   that while none of them can see it.
 
-⚠ **Degradation only — no `leaf_ready` and no `leaf_stopping`.** Inactive is this leaf's resting state
+**Degradation only — no `leaf_ready` and no `leaf_stopping`.** Inactive is this leaf's resting state
 rather than a transition; the whole design is a process that ends to give its memory back.
 
-⚠ **The lifecycle is seeded from this leaf's own journal** (`LeafState`, Journal 1.8.0), and the defect
+**The lifecycle is seeded from this leaf's own journal** (`LeafState`, Journal 1.8.0), and the defect
 that fix exists for was measured here: a missing model was reported, the daemon idled out, it woke with
 the model restored, and **no recovery was written** — the fresh process had never seen the fault.
 
@@ -81,18 +81,18 @@ the model restored, and **no recovery was written** — the fresh process had ne
 `leaf_degraded` on component `backend`, through `TheKrystalShip.KGSM.Lifecycle`, when the daemon is
 answering and `CanApply` is false.
 
-⚠ **The most dangerous silent state on a KGSM host.** Ports are opened when a server starts and closed
+**The most dangerous silent state on a KGSM host.** Ports are opened when a server starts and closed
 when it stops, so an authority that answers but cannot write leaves them closed on a start — nobody can
 connect — or open on a stop, with every caller told the request was accepted, because it was. The fact
 was already computed and logged at startup; nothing outside the process could act on it.
 
-⚠ **Degradation only — no `leaf_ready` and no `leaf_stopping`.** This daemon is socket activated with a
+**Degradation only — no `leaf_ready` and no `leaf_stopping`.** This daemon is socket activated with a
 30s idle window and woke 35 times in a measured day; a start and a stop on each would be five times its
 whole journal's daily output, to report that a socket-activated daemon did the one thing socket
 activation exists to make it do. **Inactive is its resting state, not a transition** — which is also
 why nothing can health-poll it: connecting to the socket is what starts it.
 
-⚠ **The lifecycle is seeded from this authority's own journal** (`LeafState`, Journal 1.8.0). It exits
+**The lifecycle is seeded from this authority's own journal** (`LeafState`, Journal 1.8.0). It exits
 when idle and so remembers nothing between wakes: without the seed it would re-report a standing fault
 on every one of those 35 wakes and — worse — could never clear one, because the process that sees the
 backend working again is not the process that saw it fail. A healthy wake therefore reports rather than
@@ -107,7 +107,7 @@ its group access, and warns when it does not. A directory cannot be entered with
 directory above it, so a state directory closed to the group hides the journal inside it however
 permissive the journal's own mode is.
 
-⚠ **That failure is silent.** A reader that cannot traverse in gets `Directory.Exists == false`, not a
+**That failure is silent.** A reader that cannot traverse in gets `Directory.Exists == false`, not a
 permission error — so discovery concludes this producer has recorded nothing, which is exactly what a
 genuinely idle leaf looks like. This unit declares `0750` and names the shared `kgsm` group, so the
 check stays quiet here; it exists for the leaf that ships `0700` and disappears.
@@ -117,7 +117,7 @@ check stays quiet here; it exists for the leaf that ships `0700` and disappears.
 ### Added — this producer prunes its own journal
 
 Segments older than **90 days** are removed, matching the engine's own retention window
-(`TheKrystalShip.KGSM.Journal` 1.4.0). ⚠ **Before this, only the engine pruned anything** — its daily
+(`TheKrystalShip.KGSM.Journal` 1.4.0). **Before this, only the engine pruned anything** — its daily
 timer covers its own directory alone, and every leaf journal grew without bound.
 
 Pruning runs at startup and again when the segment date rolls over, so a resident daemon prunes daily
@@ -136,7 +136,7 @@ authority keeps what is its own — the two edge event types, the structured `Po
 rule that only a confirmed change is recorded — and stops carrying its own copy of the write path.
 
 - **`ProducerVersion` is the informational version.** These edges carried `1.5.0.0`, a four-part form
-  no release of this authority is ever numbered with. They now carry `1.6.0+<sha>`. ⚠ Lines already on
+  no release of this authority is ever numbered with. They now carry `1.6.0+<sha>`. Lines already on
   disk keep the old spelling; the field is free text, so a reader comparing across the change sees both.
 - **`DefaultActor` and `DefaultOrigin` are explicitly null**, which is this authority's whole provenance
   model made structural rather than incidental. Every other producer defaults to attributing an action
@@ -234,7 +234,7 @@ than being told they are the same. A close carries no ports: removal is addresse
 the authority does not read back what it deleted — listing them would report the caller's idea of the
 ports as the authority's measurement.
 
-⚠ The unit gains `StateDirectory=kgsm-firewall` with **`StateDirectoryMode=0755`**, not systemd's default
+The unit gains `StateDirectory=kgsm-firewall` with **`StateDirectoryMode=0755`**, not systemd's default
 0700. This service runs as root and every reader on the host is unprivileged; a directory they cannot
 enter would report this authority's history as unreadable, which is indistinguishable from a genuine read
 failure.

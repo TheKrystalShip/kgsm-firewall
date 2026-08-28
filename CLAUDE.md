@@ -86,7 +86,7 @@ editing the code; `README.md` is the authoritative deploy/operate guide.
 - **This authority records the edges it applied, in its OWN journal** (`FirewallJournal` →
   `Firewall__EventJournalDirectory`, default `/var/lib/kgsm-firewall/events`). It is the component that
   wrote the rule and saw the backend accept it, so it is the only one that can honestly say a port
-  opened. ⚠ **No caller may record a firewall edge** — a second author puts one change in the trail
+  opened. **No caller may record a firewall edge** — a second author puts one change in the trail
   twice, under two different names. Do not add one, in kgsm, the watchdog, or anywhere else.
 - **Provenance is repeated, never vouched for.** `FirewallRequest.Actor`/`Origin` carry who asked; this
   daemon writes them onto the record and cannot check them. A caller that names nobody produces a real

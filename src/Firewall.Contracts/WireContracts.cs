@@ -70,7 +70,7 @@ public sealed record PortDto(int Start, int End, string Protocol);
 /// named rather than inventing an actor.
 /// </para>
 /// <para>
-/// ⚠ Passing these is <b>not</b> asking the authority to emit on the caller's behalf. The authority
+/// Passing these is <b>not</b> asking the authority to emit on the caller's behalf. The authority
 /// performs the firewall change and authors the record of it; provenance says whose authority the
 /// request carried, which is exactly what the caller alone knows.
 /// </para>
