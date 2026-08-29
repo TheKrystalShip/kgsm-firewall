@@ -26,7 +26,7 @@
 
     <RootNamespace>TheKrystalShip.KGSM.Firewall</RootNamespace>
     <AssemblyName>kgsm-firewall</AssemblyName>
-    <Version>1.11.0</Version>
+    <Version>1.11.1</Version>
 
     <!-- Footprint tuning for the AOT image (mirrors kgsm-watchdog): there is no hot path to speed up,
          so trade throughput for a smaller native image. -->
