@@ -20,7 +20,7 @@ using TheKrystalShip.KGSM.LeafConfig;
 // /etc/systemd/system here rather than in a user-owned directory: this is the one leaf whose binary
 // and units stay root-owned, because its daemon runs as root.
 [assembly: LeafFloorSource("appsettings", "/opt/kgsm-firewall/kgsm-firewall.settings.json")]
-[assembly: LeafFloorSource("systemd-unit", "/etc/systemd/system/kgsm-firewall.service")]
+[assembly: LeafFloorSource("systemd-unit", "kgsm-firewall.service")]
 [assembly: LeafFloorSource("env-file", "/etc/kgsm-firewall/kgsm-firewall.env")]
 
 [assembly: LeafFrameworkNamespace("Logging__",

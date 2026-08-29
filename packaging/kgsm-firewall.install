@@ -15,9 +15,17 @@ post_install() {
 
   kgsm-firewall needs no configuration: /etc/kgsm-firewall/kgsm-firewall.env holds overrides only.
 
-  It needs a backend to configure, and detects one at runtime in this order: an active
-  nftables or firewalld, then nft, iptables, ufw. With none installed it reports the backend as
-  unsupported rather than pretending a port is open.
+  It opens and closes ports on ufw, which is the host firewall it has a driver for, and it finds ufw
+  by ufw being ACTIVE. So a host that wants instance ports opened needs two things:
+
+    pacman -S ufw && systemctl enable --now ufw       # or Firewall__Backend=ufw to pin it
+    kgsm config set enable_firewall_management true   # the engine asks only when this is on
+
+  Neither is done for you. Opening ports on someone's host is not a default, and ufw refusing traffic
+  the moment it is enabled is not something a package scriptlet should spring on a machine.
+
+  Without an active ufw the daemon still starts, detects whatever manages the host, drives none of it
+  and says so in its log — every request reports unsupported rather than pretending a port is open.
 
   The socket is root:kgsm 0660, which is the whole access boundary — that group membership is how
   the unprivileged engine reaches a root daemon with no further grant.

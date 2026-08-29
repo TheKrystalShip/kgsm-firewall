@@ -24,13 +24,16 @@ options=('!debug')
 # kgsm-base carries the kgsm account whose group owns this socket — which is the whole of how an
 # unprivileged engine reaches a root daemon — and the preset policy deciding whether it runs here.
 depends=('kgsm-base' 'systemd' 'glibc')
-# At least one backend must exist or the daemon has nothing to configure. It detects them in this
-# order at runtime, so any one of these satisfies it — which is why none is a hard dependency.
+# ufw is the backend this authority has a driver for, and it is what a host that wants instance ports
+# opened installs. It is not a hard dependency because a node running only container instances, or one
+# whose ports are opened somewhere else entirely, has no use for it — and a package that refuses to
+# install without a firewall would be deciding that for the host.
+#
+# The daemon also DETECTS firewalld, nftables and iptables, and drives none of them: it reports every
+# request unsupported and says so at boot. They are deliberately not listed here — an optdepend is a
+# suggestion that installing it gains you something, and installing one of those gains nothing.
 optdepends=(
-    'nftables: firewall backend (preferred)'
-    'iptables: firewall backend'
-    'ufw: firewall backend'
-    'firewalld: firewall backend'
+    'ufw: the host firewall this authority opens and closes instance ports on'
 )
 backup=('etc/kgsm-firewall/kgsm-firewall.env')
 install="${pkgname}.install"

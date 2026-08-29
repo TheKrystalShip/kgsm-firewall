@@ -29,6 +29,19 @@ internal static class DaemonHost
         var detector = new BackendDetector(runner, loggers.CreateLogger<BackendDetector>());
         FirewallBackend backend = await detector.DetectAsync(options, ct).ConfigureAwait(false);
         IFirewallDriver driver = DriverFactory.Create(backend, options, runner, loggers);
+
+        // Detection answers "which firewall manages this host", which is not the same question as
+        // "which one can this authority drive". ufw is the backend with a driver, and it is only
+        // detected while it is ACTIVE — so a host with ufw installed but not enabled, or with none of
+        // them, lands on a backend that reports every request unsupported. That is the honest outcome
+        // and it stays, but it is worth saying out loud at boot: the alternative is a daemon that
+        // starts cleanly and refuses the first port a server asks for, with the reason a request away.
+        if (driver.Capabilities == FirewallCapabilities.None)
+            boot.LogWarning(
+                "detected backend {Backend}, which has no driver — every request will report unsupported and no "
+                + "port will be opened. ufw is the backend this authority drives: enable it (systemctl enable "
+                + "--now ufw) and it is detected automatically, or set Firewall__Backend=ufw to drive it "
+                + "regardless of whether it is active", backend);
         var service = new FirewallService(driver, loggers.CreateLogger<FirewallService>());
 
         // Idle-exit only makes sense under socket activation, where systemd re-spawns us on the next

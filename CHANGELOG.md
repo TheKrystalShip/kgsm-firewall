@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed — the package names the backend this authority can actually drive (1.11.0)
+
+`optdepends` offers `ufw` and nothing else, and the install message says what a host has to do to get a
+port opened: an active ufw, and `enable_firewall_management` on in the engine. Neither is done for the
+host — opening ports is not a default, and enabling a firewall from a scriptlet is not either.
+
+firewalld, nftables and iptables are detected and driven by nothing. Offering them as backends sent an
+operator to install one and left them with an authority that reports every request unsupported.
+
+### Added — a driverless backend says so at boot (1.11.0)
+
+The daemon warns once at startup when what it detected has no driver, naming both fixes — enable ufw, or
+pin `Firewall__Backend=ufw`. Detection answers which firewall manages the host, which is not the question
+of which one this can drive, and the gap used to surface as a refusal on the first port a server asked for.
+
+### Fixed — the descriptor names this leaf's unit, not a path to it (1.11.0)
+
+The `systemd-unit` floor source names `kgsm-firewall.service`. Where that file sits is a property of how
+the host was provisioned, and this leaf cannot know which.
+
 ## [1.10.0] - 2026-08-23
 
 ### Changed — a packaged install arms the socket, not the service
