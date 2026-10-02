@@ -126,7 +126,10 @@ printf '{"op":"backend"}\n' | socat -t5 - UNIX-CONNECT:/tmp/fw.sock   # or: Fire
   by `TheKrystalShip.KGSM.ComponentConfig` — so edit the settings class, never the JSON, and commit what
   the build produces. A settings key nothing describes fails the build naming it. The package is
   build-only and declares no dependencies, so the AOT image is unaffected (ILC stays 0-warn). Format:
-  `../leaf-config-descriptor.md`; mechanism: `../kgsm-componentconfig/README.md`.
+  `../leaf-config-descriptor.md`; mechanism: `../kgsm-componentconfig/README.md`. The same build writes
+  `deploy/kgsm-firewall.leaf.actions.json`, the actions a person needs here
+  (`src/Firewall/ActionDeclarations.cs`, checked by kgsm-api before it relays), which the deploy and the
+  package install beside the descriptor in `leaves/actions/`.
 - Namespaces `TheKrystalShip.KGSM.Firewall[.Core|.Drivers.Ufw]`; assembly `kgsm-firewall`. Types are
   `internal` (the daemon is the only consumer; the public wire surface is the separate Contracts package),
   exposed to tests via `InternalsVisibleTo`.

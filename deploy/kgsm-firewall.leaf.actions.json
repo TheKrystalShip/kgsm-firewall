@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "component": "firewall",
+  "version": "1.12.0",
+  "actions": [
+    {
+      "id": "config.read",
+      "title": "Read Firewall settings",
+      "effect": "read",
+      "scope": "node"
+    },
+    {
+      "id": "config.write",
+      "title": "Change Firewall settings",
+      "effect": "write",
+      "scope": "node"
+    },
+    {
+      "id": "journal.read",
+      "title": "Read Firewall logs",
+      "effect": "read",
+      "scope": "node"
+    },
+    {
+      "id": "lifecycle.restart",
+      "title": "Restart Firewall",
+      "effect": "execute",
+      "scope": "node"
+    },
+    {
+      "id": "rules.read",
+      "title": "See which ports this machine has open, and for what",
+      "effect": "read",
+      "scope": "node"
+    }
+  ],
+  "requires": []
+}
