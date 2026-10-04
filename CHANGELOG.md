@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — built on a released package (1.12.1)
+
+Builds with `TheKrystalShip.KGSM.ComponentConfig` 3.2.0. No behaviour changes.
+
 ### Added — the firewall declares the action a person needs to read it (1.12.0)
 
 `firewall:rules.read`, beside the standard configuration, journal and lifecycle actions, in
