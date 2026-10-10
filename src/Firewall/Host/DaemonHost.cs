@@ -114,7 +114,7 @@ internal static class DaemonHost
     /// above it, environment variables (<c>Logging__LogLevel__Default=Debug</c>). The Systemd formatter
     /// emits <c>&lt;N&gt;</c> syslog priority prefixes so <c>journalctl -p</c> can filter by level, and omits
     /// the timestamp/colour journald already supplies. No DI container/host — just the bare
-    /// <see cref="LoggerFactory"/>. See <c>../tks/logging-convention.md</c>.
+    /// <see cref="LoggerFactory"/>. See <c>kgsm-docs/reference/logging-convention.md</c>.
     /// </summary>
     /// <remarks>
     /// The configuration is handed in rather than rebuilt here, so the levels come from the same stack,

@@ -1,101 +1,72 @@
 # CLAUDE.md — kgsm-firewall
 
-Guidance for Claude Code working in this repo. kgsm-firewall is the KGSM ecosystem's **host-firewall
-authority** — a lean, .NET 10 Native-AOT, socket-activated privileged helper that owns all host-firewall
-state (open/close/list) behind a firewall-agnostic driver seam.
+The host-firewall authority: a .NET 10 Native-AOT, socket-activated helper that runs as root and owns all
+host-firewall state (open, close, list) behind a firewall-agnostic driver seam. Role, contracts and peers:
+`../kgsm-docs/components/kgsm-firewall.md`; behaviour and failure modes:
+`../kgsm-docs/systems/operations/firewall-and-ports.md`; why it is a root authority of its own:
+`../kgsm-docs/decisions/0013-firewall-is-a-root-authority-of-its-own.md`. `README.md` is the deploy,
+validate and troubleshoot guide and lists the layout.
 
-This file is the authoritative design and rationale for kgsm-firewall, plus the working rules for
-editing the code; `README.md` is the authoritative deploy/operate guide.
+## Code map
 
-## The pieces, by directory
+- `Host/`, `Program.cs`: one binary, two roles. The socket-activated root daemon (`serve`) and its own CLI
+  client (`ensure-open`, `remove`, `list`, `backend`) over a newline-delimited-JSON unix socket. Real
+  systemd FD adoption (`sd_listen_fds`), else bind-own-path for dev. ufw mutations serialise through one
+  gate (ufw's global lock). `ExitCodes` (unreachable, unsupported, op-failed, unknown) lets the kgsm bash
+  caller tell "authority down, abort the install" from "backend reached but rejected the rule".
+- `Host/FirewallJournal.cs`: the edges this authority applied, via `TheKrystalShip.KGSM.Journal`. The
+  directory is created at startup so a reader can discover the producer before its first edge; it is
+  root-owned and world-readable (0755/0644), because the record holds which ports opened, not a credential.
+- `Core/`, `Drivers/Ufw/`: the `IFirewallDriver` seam, capability model, validation (before any driver),
+  backend detection, and the ufw driver (profile store, render/parse, ownership tag `kgsm-<instance>`).
+- `src/Firewall.Contracts`: the standalone wire package (own `PortDto`, no kgsm-lib reference, source-gen
+  JSON) consumed by the daemon and by kgsm-lib's client, so the wire cannot drift. Wire:
+  `../kgsm-docs/reference/firewall-authority.md`.
+- Consumers: kgsm (bash) through `commands/handlers/firewall.sh`, which shells the bundled CLI; C# through
+  kgsm-lib's `IFirewallService`, which maps `PortMapping` to `PortDto`.
 
-- **Authority daemon + bundled CLI** (`Host/`, `Program.cs`) — one Native-AOT binary with two roles: the
-  socket-activated root daemon (`serve`) and its own CLI client (`ensure-open`/`remove`/`list`/`backend`)
-  over a newline-delimited-JSON unix socket. Real systemd FD adoption (`sd_listen_fds`), else bind-own-path
-  for dev. ufw mutations are serialised through one gate (ufw's global lock). The **exit-code contract**
-  (`ExitCodes`: unreachable / unsupported / op-failed / unknown) lets the kgsm bash caller distinguish
-  "authority down → abort the install" from "backend reached but rejected the rule".
-- **Event journal** (`Host/FirewallJournal.cs`) — the edges this authority applied, appended to
-  `/var/lib/kgsm-firewall/events` via `TheKrystalShip.KGSM.Journal`. Idle-exit is irrelevant to it: a
-  journal is append-only and written inside the request the daemon is already awake to serve, so it needs
-  no resident writer. The directory is created at startup so a reader can discover this producer before
-  its first edge — root-owned and world-readable (0755/0644), because every reader on the host is
-  unprivileged and the record holds which ports opened, not a credential.
-- **Idle-exit** — the socket-activated daemon exits after `Firewall__IdleTimeoutSeconds`s with no connections
-  (default 30; `0` = resident; a positive value below 5 is clamped to 5) so it does not hold root 24/7;
-  systemd re-activates it on the next connection. Gated on socket activation (a manual run has nothing to
-  re-spawn it, so it stays resident). The accept loop holds **one outstanding accept** and races it against
-  the idle delay, exiting only when no handler is in flight and no connection has landed — so an in-flight
-  `ufw` write is never abandoned. Idle-exit returns 0, and the `.service` carries `StartLimitIntervalSec=0`
-  so activate/idle-exit bursts can't trip systemd's start-rate limit (which would make the authority
-  unreachable and abort a hard-fail install). **No boot-reconcile loop by design:** ufw persists its own
-  rules in `/etc/ufw` (replayed at boot by `ufw.service`), so the on-demand daemon need not run at boot.
-- **Core domain + ufw driver** (`Core/`, `Drivers/Ufw/`) — the `IFirewallDriver` seam, capability model,
-  validation (before any driver), backend detection, and the ufw driver: application-profile store +
-  render/parse, ownership tag `kgsm-<instance>`, honest `Unknown`. ufw is the only driver today; others are
-  drop-in (see Conventions).
-- **Wire contract** — the standalone `src/Firewall.Contracts` project (net10.0, AOT/trim-clean, **no kgsm-lib
-  reference**, own `PortDto`): the public request/response DTOs, op/outcome tokens, line protocol, and
-  source-gen JSON. Both the daemon and kgsm-lib's client consume this one package, so the wire can't drift.
-- **Consumers.** kgsm (bash) routes its `files firewall` path through the IPC chokepoint
-  `commands/handlers/firewall.sh`, which shells the bundled CLI. C# consumers go through kgsm-lib's
-  `IFirewallService` (the socket client, parallel to `IWatchdogClient`), which maps
-  `PortMapping`↔`PortDto`. **Neither records the edge** — this authority does, in its own journal, with
-  the `Ports` payload as the canonical structured `[{start,end,protocol}]`. Both pass their actor and
-  origin so that record can say who asked. **Asymmetric hard-fail:** enable/install aborts if the authority is unreachable; disable/uninstall
-  warns and continues so a down authority can't wedge an uninstall.
-- **Deployment.** `deploy/setup.sh` provisions the host once, asking for sudo (install dir, units,
-  socket enabled, a polkit rule scoped to this project's units); `deploy/deploy.sh` deploys after
-  that, and refuses **before building** with *"run `deploy/setup.sh`"* on an unprovisioned host.
-  Same two-script pattern as every `kgsm-*` repo, vendored in `deploy/` so a standalone clone
-  deploys. The AOT single-file binary lives at
-  `/opt/kgsm-firewall/kgsm-firewall` (symlinked into `/usr/local/bin`); the socket is `root:kgsm` 0660;
-  `kgsm-firewall.socket` is enabled (boots) and the `.service` is socket-activated + idle-exiting.
-  **This is the one project whose `deploy.sh` asks for sudo**, and deliberately: the daemon runs
-  as root, so its binary and unit files must stay root-owned — a root-executed binary an unprivileged
-  user can rewrite is a real privilege-escalation path, not a technicality. Chowning the prefix to
-  the deploying user, the trick that makes every other `kgsm-*` deploy passwordless, would create
-  exactly that here. The escalation is narrowed to **two calls** (installing the binary root-owned,
-  refreshing the `/usr/local/bin` symlink) — don't widen it, and don't "fix" it to match the others.
-  The `systemctl` verbs still go through the polkit grant, so they need no password.
-  `README.md` is the operator deploy/validate/troubleshoot guide and ships
-  a health-check script in `deploy/`.
+## Idle-exit
 
-## Invariants (do not break)
+The daemon exits after `Firewall__IdleTimeoutSeconds` with no connections (default 30; `0` is resident; a
+positive value below 5 is clamped to 5), so it does not hold root around the clock. It is gated on socket
+activation: a manual run has nothing to re-spawn it, so it stays resident. The accept loop holds one
+outstanding accept and races it against the idle delay, exiting only when no handler is in flight and no
+connection has landed, so an in-flight `ufw` write is never abandoned. Idle-exit returns 0, and the
+`.service` carries `StartLimitIntervalSec=0` so activate/idle-exit bursts cannot trip systemd's start-rate
+limit and make the authority unreachable. There is no boot-reconcile loop: ufw replays its own rules from
+`/etc/ufw` at boot.
 
-- **No dependency on kgsm-lib.** This daemon runs as **root**, and a process runner, an RCON client and
-  a set of HTTP clients are attack surface a firewall authority has no use for — so it takes the small
-  packages it needs and not the engine-interop library. In particular **do not reference kgsm-lib's
-  `PortMapping`** — this repo has its own `PortSpec`; map at the `IFirewallService` boundary (in
-  kgsm-lib), not here. The two packages it does take are `Firewall.Contracts` (its own wire shapes, which
-  kgsm-lib also consumes) and **`TheKrystalShip.KGSM.Journal`**, the journal's write half, whose whole
-  dependency is `Logging.Abstractions`.
+## Deploying
+
+`deploy/setup.sh` provisions the host once; `deploy/deploy.sh` refuses before building with "run
+`deploy/setup.sh`" on an unprovisioned host. **This is the one `deploy.sh` that asks for sudo, and
+deliberately**: the daemon runs as root, so its binary and units stay root-owned (a root-executed binary an
+unprivileged user can rewrite is a privilege-escalation path). The escalation is two calls, installing the
+binary root-owned and refreshing the `/usr/local/bin` symlink. Do not widen it, and do not "fix" it to match
+the other repos' passwordless pattern. The `systemctl` verbs still go through the polkit grant.
+
+## Invariants
+
+- **No dependency on kgsm-lib.** A root process takes the small packages it needs: `Firewall.Contracts` and
+  `TheKrystalShip.KGSM.Journal` (whose only dependency is `Logging.Abstractions`). Do not reference
+  kgsm-lib's `PortMapping`; this repo has its own `PortSpec`, mapped at kgsm-lib's `IFirewallService`.
 - **Never fabricate a status.** A backend that cannot answer "is this open" returns `Unknown`, never a
-  guessed empty list / `open:false`. This authority is the only honest source for the kgsm-api `open`
-  verdict (ecosystem rule: measured, or explicitly unknown — never invented).
-- **Validation lives in the service core, before the driver.** Drivers assume well-formed input. Don't
-  trust the caller, even kgsm.
-- **Each driver owns its own native rendering** (ufw profile text, firewalld zone, nft chain…). The
-  contract passes structured ports only; a pre-rendered backend artifact would break agnosticism.
-- **Ownership tagging is mandatory on every driver:** `kgsm-<instance>`. List/remove must touch only our
+  guessed empty list or `open:false`.
+- **Validation lives in the service core, before the driver**; drivers assume well-formed input.
+- **Each driver owns its native rendering.** The contract passes structured ports only.
+- **Ownership tagging is mandatory on every driver** (`kgsm-<instance>`); list and remove touch only our
   rules. Detection precedence: `active ufw/firewalld > nft > iptables > none`.
-- **Native-AOT safe / reflection-free.** Plain `Microsoft.NET.Sdk` (NOT `Sdk.Web` — a privileged helper
-  should not carry the ASP.NET HTTP stack), `PublishAot`, footprint-tuned like kgsm-watchdog. Shell out via
-  `Process` + `ArgumentList` only (no shell, no reflection). Every change must keep `dotnet publish -r
-  linux-x64` a clean ILC pass (0 IL2026/IL3050/ILC). Use `[GeneratedRegex]`, not runtime `new Regex`.
-- **This authority records the edges it applied, in its OWN journal** (`FirewallJournal` →
-  `Firewall__EventJournalDirectory`, default `/var/lib/kgsm-firewall/events`). It is the component that
-  wrote the rule and saw the backend accept it, so it is the only one that can honestly say a port
-  opened. **No caller may record a firewall edge** — a second author puts one change in the trail
-  twice, under two different names. Do not add one, in kgsm, the watchdog, or anywhere else.
-- **Provenance is repeated, never vouched for.** `FirewallRequest.Actor`/`Origin` carry who asked; this
-  daemon writes them onto the record and cannot check them. A caller that names nobody produces a real
-  null, never a substituted `system`. The bundled CLI reads `KGSM_EVENT_ACTOR`/`KGSM_EVENT_ORIGIN` — the
-  same variables kgsm's own emitter reads, so the two paths cannot name different actors for one action.
-- **Only a confirmed change is recorded.** `applied` / `applied-inactive` / `removed` are edges; a no-op,
-  an unsupported backend and a refusal changed nothing and produce no line. The precise outcome rides on
-  the payload so a reader can tell an enforced rule from a staged one rather than being told they are the
-  same.
+- **Native-AOT safe and reflection-free.** Plain `Microsoft.NET.Sdk` (not `Sdk.Web`), `PublishAot`. Shell out
+  through `Process` + `ArgumentList` only. `dotnet publish -r linux-x64` stays a clean ILC pass; use
+  `[GeneratedRegex]`, never a runtime `new Regex`.
+- **This authority alone records the firewall edges it applied**, in its own journal
+  (`Firewall__EventJournalDirectory`, default `/var/lib/kgsm-firewall/events`). No caller records one; a
+  second author puts one change in the trail twice under two names.
+- **Provenance is repeated, never vouched for.** `FirewallRequest.Actor`/`Origin` are written onto the
+  record unchecked. A caller naming nobody produces a real null, never a substituted `system`. The bundled
+  CLI reads `KGSM_EVENT_ACTOR`/`KGSM_EVENT_ORIGIN`, the variables kgsm's own emitter reads.
+- **Only a confirmed change is recorded.** `applied`, `applied-inactive` and `removed` are edges; a no-op,
+  an unsupported backend and a refusal produce no line.
 
 ## Commands
 
@@ -105,79 +76,46 @@ dotnet test  kgsm-firewall.slnx -c Release
 dotnet test  kgsm-firewall.slnx -c Release --filter "FullyQualifiedName~UfwDriverTests"
 dotnet publish src/Firewall/Firewall.csproj -c Release -r linux-x64   # expect 0 warnings
 
-# De-risk systemd FD adoption against the PUBLISHED AOT binary (the one path no unit test covers):
+# FD adoption against the PUBLISHED AOT binary (the one path no unit test covers):
 BIN=src/Firewall/bin/Release/net10.0/linux-x64/publish/kgsm-firewall
-# NOTE: systemd-socket-activate sanitises the child's environment, so Firewall__* set around it does
-# NOT reach the daemon (use --setenv, or run `serve` directly, to exercise a knob). The real unit's
-# Environment=/EnvironmentFile= propagate normally.
+# systemd-socket-activate sanitises the child's environment, so Firewall__* set around it does not reach
+# the daemon (use --setenv, or run `serve` directly, to exercise a knob).
 systemd-socket-activate -l /tmp/fw.sock "$BIN" serve &
 printf '{"op":"backend"}\n' | socat -t5 - UNIX-CONNECT:/tmp/fw.sock   # or: Firewall__SocketPath=/tmp/fw.sock "$BIN" backend
 ```
 
 ## Conventions
 
-- **Logging:** the ecosystem convention (`../logging-convention.md`) — the daemon builds a bare
-  `LoggerFactory.Create` (no host) with `AddSystemdConsole()` (journald `<N>` priority prefix) +
-  `kgsm-firewall.settings.json`/env levels (`Logging__LogLevel__Default`); the CLI-client path stays
-  `Console.WriteLine` (user output, off the log channel). The logging stack costs ~0.8 MiB of AOT
-  image (accepted); keep the ILC pass 0-warn.
-- **The leaf config descriptor is generated, not written.** `deploy/kgsm-firewall.leaf.json` comes
-  from `[ConfigField]` attributes and `<panel>` doc tags on `FirewallSettings`, rewritten on every build
-  by `TheKrystalShip.KGSM.ComponentConfig` — so edit the settings class, never the JSON, and commit what
-  the build produces. A settings key nothing describes fails the build naming it. The package is
-  build-only and declares no dependencies, so the AOT image is unaffected (ILC stays 0-warn). Format:
-  `../leaf-config-descriptor.md`; mechanism: `../kgsm-componentconfig/README.md`. The same build writes
-  `deploy/kgsm-firewall.leaf.actions.json`, the actions a person needs here
-  (`src/Firewall/ActionDeclarations.cs`, checked by kgsm-api before it relays), which the deploy and the
-  package install beside the descriptor in `leaves/actions/`.
-- Namespaces `TheKrystalShip.KGSM.Firewall[.Core|.Drivers.Ufw]`; assembly `kgsm-firewall`. Types are
-  `internal` (the daemon is the only consumer; the public wire surface is the separate Contracts package),
-  exposed to tests via `InternalsVisibleTo`.
-- Adding a backend = implement `IFirewallDriver` in `Drivers/<Backend>/`, declare its `Capabilities`, add a
-  detection branch. Nothing else moves (mirrors kgsm-lib's `IDiscordIdentityResolver` one-interface seam).
+- **Logging:** `../kgsm-docs/reference/logging-convention.md`. The daemon builds a bare
+  `LoggerFactory.Create` (no host) with `AddSystemdConsole()` and `kgsm-firewall.settings.json`/env levels;
+  the CLI-client path stays `Console.WriteLine` (user output, off the log channel).
+- **The leaf config descriptor is generated.** `deploy/kgsm-firewall.leaf.json` comes from `[ConfigField]`
+  attributes and `<panel>` doc tags on `FirewallSettings`, rewritten on every build by
+  `TheKrystalShip.KGSM.ComponentConfig`: edit the settings class, never the JSON, and commit what the build
+  produces. The same build writes `deploy/kgsm-firewall.leaf.actions.json` from
+  `src/Firewall/ActionDeclarations.cs`. Format: `../kgsm-docs/reference/leaf-config-descriptor.md`;
+  mechanism: `../kgsm-componentconfig/README.md`.
+- Namespaces `TheKrystalShip.KGSM.Firewall[.Core|.Drivers.Ufw]`, assembly `kgsm-firewall`. Types are
+  `internal`, exposed to tests via `InternalsVisibleTo`.
+- Adding a backend: implement `IFirewallDriver` in `Drivers/<Backend>/`, declare its `Capabilities`, add a
+  detection branch. Nothing else moves.
 - Tests use the fakes in `tests/Firewall.Tests/Fakes/` (`FakeProcessRunner`, `InMemoryUfwProfileStore`,
-  `FakeFirewallDriver`) — no real `ufw`/filesystem access. Keep it that way; gate any real-ufw test on
-  root/passwordless-sudo, as kgsm does for its firewall integration tests.
+  `FakeFirewallDriver`) and touch no real `ufw` or filesystem. Gate any real-ufw test on
+  root/passwordless-sudo.
 
 ## Version tracking
 
-- **Version source:** `<Version>` in `src/Firewall/Firewall.csproj` (the daemon, and what the package ships) and `src/Firewall.Contracts/Firewall.Contracts.csproj` (NuGet contracts package — versioned independently)
-- **Packaging reads it via `deploy/version.sh`** — `./deploy/version.sh` prints the declared version, `--pkgver` prints the pacman-safe form. A package never restates a version number; it asks for one.
-- Bump the version whenever you make a user-facing change (new feature, bug fix, behaviour change). Patch for fixes, minor for new features, major for breaking changes.
-- Update `CHANGELOG.md` under `## [Unreleased]` with a brief entry for every meaningful change.
-- A git tag matching the new version should be created on release: `git tag v<version>`.
+- Versions are `<Version>` in `src/Firewall/Firewall.csproj` (the daemon and the package) and
+  `src/Firewall.Contracts/Firewall.Contracts.csproj` (the contracts package, versioned independently);
+  `./deploy/version.sh` prints the daemon's (`--pkgver` for the pacman form).
+- Bump for every user-facing change (patch for fixes, minor for features, major for breaking changes), with a
+  `CHANGELOG.md` entry under `## [Unreleased]`, and tag it `git tag -a v<version> -m "kgsm-firewall v<version>"`.
 
-## Documentation & comments: present-tense canon only
+## Read before changing
 
-Prose in this repo — every doc, `README`/`CLAUDE.md` section, and in-code comment — describes
-**how the thing works right now**, nothing else. History lives in the `CHANGELOG` and git
-history; never duplicate it into docs or code.
+- `../kgsm-docs/reference/firewall-authority.md`, `systems/operations/firewall-and-ports.md`.
+- `../kgsm-docs/reference/event-vocabulary.md`: the `network.ports.*` edges it journals.
+- `../kgsm-docs/systems/components/`: the descriptor and action declarations.
 
-- **No transitions.** Never "was X, now Y", "used to…", "changed from…", "no longer…", or any
-  before/after framing. State the current rule flat: a sentence that only makes sense to a reader
-  who knows what the code *used to* do is dead weight, because that "before" no longer exists
-  anywhere in the code.
-- **Tombstones leave no marker.** When something is removed — dying naturally as part of the work,
-  or explicitly asked to be deleted — the removal is silent: no *"removed X"*, no *"X is gone"*,
-  no *"deprecated, use Y instead"* pointing at a corpse. The prose reads as if it never was. Code
-  kept while the thing that justified it was deleted gets a live present-tense reason to exist —
-  or goes too.
-- **No residue of the active work.** References only meaningful *during* a piece of work don't
-  survive it: *"temporary shim for the rework"*, *"added to satisfy the new requirement"*,
-  milestone/phase labels (*"per M2"*, *"the Phase 1 step"*). If a line's justification is the work
-  that produced it rather than the system as it now stands, it goes.
-- **No volatile numbers.** Counts and versions that drift — how many projects/files/tests/
-  partials exist, a dependency's pinned version, a file's line count — never go in prose: they are
-  stale the moment anything changes, and nothing fails to remind anyone. Name the authoritative
-  source instead (the csproj, the directory, the barrel file). A number belongs in prose only when
-  it *is* the contract (a port, a timeout, a cap) or a measured fact that is itself the reason a
-  design exists.
-- **Edits are replacements, not appends.** When changing an existing feature, rewrite the affected
-  doc/comment fresh as if writing it for the first time — never append a correction under the
-  stale version, and never leave the stale version standing beside the new. The current revision
-  does not converse with prior revisions.
-
-A reader six months from now should learn the system from the doc without knowing what it
-replaced. If you catch yourself explaining a change, stop — that sentence belongs in the commit
-message. When touching prose that already violates this, rewrite it to present-tense canon in
-passing.
+Docs and comments describe the system as it is now: present tense, no history, no emoji, no volatile
+numbers (workspace `../CLAUDE.md`).
