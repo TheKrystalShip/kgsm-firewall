@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — the journal package ships from its own repository
+
+The daemon pins `TheKrystalShip.KGSM.Journal` 2.6.0-dev.1.
+
 ### Added — the typed firewall client ships in the contracts package (`TheKrystalShip.KGSM.Firewall.Contracts` 1.5.0-dev.1)
 
 `IFirewallService`, `FirewallClient`, the result types (`FirewallActionResult`, `FirewallListResult`,

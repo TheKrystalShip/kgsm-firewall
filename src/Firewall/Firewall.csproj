@@ -44,17 +44,14 @@
 
   <ItemGroup>
     <!-- Build-only: the descriptor attributes arrive as source and the generator as a tool, and the
-         package declares no dependencies, so nothing here reaches the AOT publish. Not a kgsm-lib
-         dependency by any route — this package has none. -->
+         package declares no dependencies, so nothing here reaches the AOT publish. -->
     <PackageReference Include="TheKrystalShip.KGSM.ComponentConfig" Version="4.0.0" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- Standard ecosystem logging: SystemdConsole (journald-native) formatter + settings-file/env
          level config, no DI/hosting host pulled in (a console host + raw unix socket, no ASP.NET). These
-         packages are AOT-safe (the logging config binder reads the LogLevel keys directly, no reflection). NO
-         TheKrystalShip.KGSM.Lib reference: kgsm-firewall must not depend on kgsm-lib (kgsm-lib consumes
-         Firewall.Contracts, not vice versa) — that would be a dependency cycle. -->
+         packages are AOT-safe (the logging config binder reads the LogLevel keys directly, no reflection). -->
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.0" />
@@ -65,10 +62,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The wire contract now lives in the standalone Contracts package — one definition shared with
-         kgsm-lib so the two cannot drift. The daemon consumes it as a project reference (the same
-         project is packed to local-nuget for kgsm-lib to resolve). A net9.0 lib inside this net10.0
-         AOT app publishes clean; verified by the 0-warn ILC gate. -->
+    <!-- The wire contract lives in the standalone Contracts package, one definition shared with every
+         client so they cannot drift. The daemon consumes it as a project reference. -->
     <ProjectReference Include="..\Firewall.Contracts\Firewall.Contracts.csproj" />
   </ItemGroup>
 
@@ -76,7 +71,7 @@
     <!-- The journal's WRITE half only, and deliberately not kgsm-lib: this daemon runs as root, and a
          process runner, an RCON client and a set of HTTP clients are attack surface a firewall authority
          has no use for. The package's whole dependency is Logging.Abstractions, which is already here. -->
-    <PackageReference Include="TheKrystalShip.KGSM.Journal" Version="2.4.1" />
+    <PackageReference Include="TheKrystalShip.KGSM.Journal" Version="2.6.0-dev.1" />
   </ItemGroup>
 
   <ItemGroup>
