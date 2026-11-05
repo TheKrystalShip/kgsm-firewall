@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — the typed firewall client ships in the contracts package (`TheKrystalShip.KGSM.Firewall.Contracts` 1.5.0-dev.1)
+
+`IFirewallService`, `FirewallClient`, the result types (`FirewallActionResult`, `FirewallListResult`,
+`FirewallBackendInfo`, the outcome and enforcement enums), `FirewallException`, `FirewallClientOptions` and
+`AddKgsmFirewallClient` live beside the wire contract they speak. Ports are the contract's `PortDto`. The
+package depends on the logging and registration abstractions only. The daemon's version is unchanged.
+
 ### Fixed — journal appends keep every line under concurrent writes (1.12.3)
 
 The daemon pins `TheKrystalShip.KGSM.Journal` 2.4.1, whose writer appends with `O_APPEND`. Concurrent appends

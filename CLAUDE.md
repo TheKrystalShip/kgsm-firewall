@@ -19,11 +19,12 @@ validate and troubleshoot guide and lists the layout.
   root-owned and world-readable (0755/0644), because the record holds which ports opened, not a credential.
 - `Core/`, `Drivers/Ufw/`: the `IFirewallDriver` seam, capability model, validation (before any driver),
   backend detection, and the ufw driver (profile store, render/parse, ownership tag `kgsm-<instance>`).
-- `src/Firewall.Contracts`: the standalone wire package (own `PortDto`, no kgsm-lib reference, source-gen
-  JSON) consumed by the daemon and by kgsm-lib's client, so the wire cannot drift. Wire:
+- `src/Firewall.Contracts`: the standalone package (own `PortDto`, source-gen JSON) holding the wire and the
+  typed client (`IFirewallService`, `FirewallClient`, `AddKgsmFirewallClient`), consumed by the daemon and by
+  every C# caller, so the wire cannot drift. Wire:
   `../kgsm-docs/reference/firewall-authority.md`.
 - Consumers: kgsm (bash) through `commands/handlers/firewall.sh`, which shells the bundled CLI; C# through
-  kgsm-lib's `IFirewallService`, which maps `PortMapping` to `PortDto`.
+  `IFirewallService` from the contracts package, which takes `PortDto`.
 
 ## Idle-exit
 
@@ -47,9 +48,9 @@ the other repos' passwordless pattern. The `systemctl` verbs still go through th
 
 ## Invariants
 
-- **No dependency on kgsm-lib.** A root process takes the small packages it needs: `Firewall.Contracts` and
-  `TheKrystalShip.KGSM.Journal` (whose only dependency is `Logging.Abstractions`). Do not reference
-  kgsm-lib's `PortMapping`; this repo has its own `PortSpec`, mapped at kgsm-lib's `IFirewallService`.
+- **A root process takes the small packages it needs:** `Firewall.Contracts` and
+  `TheKrystalShip.KGSM.Journal` (whose only dependencies are the logging and registration abstractions). The
+  daemon has its own `PortSpec`; the contracts package has its own `PortDto`.
 - **Never fabricate a status.** A backend that cannot answer "is this open" returns `Unknown`, never a
   guessed empty list or `open:false`.
 - **Validation lives in the service core, before the driver**; drivers assume well-formed input.

@@ -7,9 +7,8 @@ namespace TheKrystalShip.KGSM.Firewall.Contracts;
 /// stack (a privileged helper shouldn't), and a tiny private protocol is enough.
 /// <para>
 /// These types are the <b>public</b> wire contract shared by both speakers: the kgsm-firewall daemon
-/// (server) and kgsm-lib's <c>IFirewallService</c> (client) consume this one package, so the shapes
-/// cannot drift. They carry NO kgsm-lib <c>PortMapping</c> reference — this package owns its own
-/// <see cref="PortDto"/>; kgsm-lib maps <c>PortMapping</c>↔<see cref="PortDto"/> at its boundary. Wire
+/// (server) and <see cref="IFirewallService"/> (client) consume this one package, so the shapes
+/// cannot drift. This package owns its own <see cref="PortDto"/>. Wire
 /// collections are arrays (the most AOT-/source-gen-friendly shape); a domain's <c>IReadOnlyList</c> is
 /// mapped at each boundary.
 /// </para>

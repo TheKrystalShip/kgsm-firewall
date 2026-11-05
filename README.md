@@ -331,12 +331,11 @@ Port tokens are `<port>/<proto>` or `<start>:<end>/<proto>`, `proto ∈ {tcp,udp
 You normally never call `kgsm-firewall` by hand — KGSM does, through the dependency chokepoint:
 
 - **kgsm (bash)** invokes the bundled CLI verbs directly (it never speaks the socket protocol).
-- **C# components** (the Control Panel API, etc.) go through **kgsm-lib's `IFirewallService`**, which is the
-  socket client on the C# side — exactly parallel to how they reach the watchdog. They never talk to
-  kgsm-firewall directly.
+- **C# components** (the Control Panel API, etc.) go through **`IFirewallService`** from the
+  `TheKrystalShip.KGSM.Firewall.Contracts` package, the socket client on the C# side, parallel to how they reach
+  the watchdog. They never talk to kgsm-firewall directly.
 
-kgsm-firewall itself **emits no events** and **depends on no other KGSM component** (in particular, not on
-kgsm-lib — that would be a dependency cycle). It is a standalone authority: deploy it next to a KGSM engine
+kgsm-firewall itself **depends on no other KGSM component**. It is a standalone authority: deploy it next to a KGSM engine
 and it works on its own.
 
 ---
@@ -377,8 +376,8 @@ printf '{"op":"backend"}\n' | socat -t5 - UNIX-CONNECT:/tmp/fw.sock
 ```
 src/
   Firewall.Contracts/   # the public wire contract (request/response DTOs, source-gen JSON, line framing),
-                        #   a standalone package consumed by both the daemon and kgsm-lib's client — one
-                        #   definition, no drift; no kgsm-lib dependency (own PortDto)
+                        #   and the typed client (IFirewallService), a standalone package consumed by the daemon and
+                        #   by every C# caller: one definition, no drift (own PortDto)
   Firewall/
     Core/        # contract types, validation, process-runner seam, service orchestrator, backend
                  #   detection, options, the null (honest-degradation) driver
