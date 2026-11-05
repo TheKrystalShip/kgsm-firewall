@@ -16,7 +16,7 @@
 
     <!-- NuGet packaging. -->
     <PackageId>TheKrystalShip.KGSM.Firewall.Contracts</PackageId>
-    <Version>1.5.0-dev.1</Version>
+    <Version>1.5.0</Version>
     <Authors>TheKrystalShip</Authors>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <Description>The kgsm-firewall host-firewall authority's control-socket contract: the newline-delimited-JSON request/response DTOs, the op/outcome tokens, the framing, the source-generated JSON context and the typed client (IFirewallService) over the socket. The daemon shares the wire definitions, so the two cannot drift.</Description>
